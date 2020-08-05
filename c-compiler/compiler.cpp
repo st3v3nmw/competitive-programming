@@ -83,20 +83,28 @@ class ASTNode {
             ASTNode::value = value;
         }
 
-    friend class Parser;
+    friend class Compiler;
 };
 
 
-class Parser {
+class Compiler {
     public:
-        Parser(string filename) {
-            Parser::filename = filename;
-            ifstream inputFl(filename, ios::in);
+        Compiler(string path) {
+            // read file
+            Compiler::path = path;
+            ifstream inputFl(path, ios::in);
             if (!inputFl) {
-                cerr << "Unable to open " << filename << endl;
+                cerr << "Unable to open " << path << endl;
                 exit(1);
             }
             inputFile.swap(inputFl);
+
+            // get the cleaned up filename
+            int name_start = path.find_last_of('/');
+            int name_end = path.find_last_of('.');
+            Compiler::filename = path.substr(name_start != -1 ? name_start + 1: 0, name_end != -1 ? name_end : path.length());
+
+            // parse and generate assembly code
             n_line = 1, line_pos = 0;
             token = Token();
             scanChars();
@@ -160,9 +168,19 @@ class Parser {
             }
         }
 
-        // evaluate the AST and return a final value
-        int interpretAST() {
-            return evaluateAST(root);
+        void generateAssembly() {
+            // assembly output file
+            ofstream outputFl("./out/" + filename + ".asm", ios::out);
+            if (!outputFl) {
+                cerr << "Couldn't create out file" << endl;
+                exit(1);
+            }
+            outputFile.swap(outputFl);
+
+            asm_preamble();
+            int reg = genASM(root);
+            asm_printint(reg);
+            asm_postamble();
         }
 
         int scanChars() {
@@ -226,14 +244,10 @@ class Parser {
         // convert a token into an AST operation
         int arithOp(int tok) {
             switch (tok) {
-                case T_PLUS:
-                    return A_ADD;
-                case T_MINUS:
-                    return A_SUBTRACT;
-                case T_STAR:
-                    return A_MULTIPLY;
-                case T_SLASH:
-                    return A_DIVIDE;
+                case T_PLUS:  return A_ADD;
+                case T_MINUS: return A_SUBTRACT;
+                case T_STAR:  return A_MULTIPLY;
+                case T_SLASH: return A_DIVIDE;
                 default:
                     printf("Unknown token %d in arithop() on line %d\n", tok, n_line);
                     exit(1);
@@ -246,43 +260,134 @@ class Parser {
         }
     
     private:
+        // parsing & scanning stuff
         char c;
         int n_line, line_pos;
         ifstream inputFile;
-        string filename;
+        string path, filename;
         shared_ptr<ASTNode> root;
         Token token;
 
-        int evaluateAST(shared_ptr<ASTNode> node) {
-            int leftval = 0, rightval = 0;
+        // code generation stuff
+        ofstream outputFile;
+        int freereg[4] = {1, 1, 1, 1};
+        string reglist[4] = {"%r8", "%r9", "%r10", "%r11"};
+
+        // given an AST, generate assembly code recursively
+        int genASM(shared_ptr<ASTNode> node) {
+            // int leftval = 0, rightval = 0;
+            int leftreg, rightreg;
 
             // get the values of the left and right subtrees
-            if (node->left)
-                leftval = evaluateAST(node->left);
-            if (node->right)
-                rightval = evaluateAST(node->right);
+            if (node->left)  leftreg  = genASM(node->left);
+            if (node->right) rightreg = genASM(node->right);
 
-            if (node->op == A_INTLIT)
-                cout << node->value << endl;
-            else
-                cout << leftval << tokstr[node->op] << rightval << endl;
-
-            // refactor this using functional code
             switch (node->op) {
-                case A_ADD:
-                    return leftval + rightval;
-                case A_SUBTRACT:
-                    return leftval - rightval;
-                case A_MULTIPLY:
-                    return leftval * rightval;
-                case A_DIVIDE:
-                    return leftval / rightval;
-                case A_INTLIT:
-                    return node->value;
+                case A_ADD:      return asm_add(leftreg, rightreg);
+                case A_SUBTRACT: return asm_sub(leftreg, rightreg);
+                case A_MULTIPLY: return asm_mul(leftreg, rightreg);
+                case A_DIVIDE:   return asm_div(leftreg, rightreg);
+                case A_INTLIT:   return asm_load(node->value);
                 default:
                     printf("Unknown AST operator %d\n", node->op);
                     exit(1);
             }
+        }
+
+
+        // allocate a ree register
+        int alloc_register() {
+            for (int i = 0; i < 4; i++) {
+                if (freereg[i]) {
+                    freereg[i] = 0;
+                    return i;
+                }
+            }
+            cerr << "Out of registers :(" << endl;
+            exit(1);
+        }
+
+
+        // free a register
+        void free_register(int reg) {
+            if (freereg[reg] != 0) {
+                cerr << "Error trying to free register " << reg << endl;
+                exit(1);
+            }
+            freereg[reg] = 1;
+        }
+
+        // Print out the assembly preamble
+        void asm_preamble() {
+            outputFile <<   "\t.text\n"
+                            ".LC0:\n"
+                            "\t.string\t\"%d\\n\"\n"
+                            "printint:\n"
+                            "\tpushq\t%rbp\n"
+                            "\tmovq\t%rsp, %rbp\n"
+                            "\tsubq\t$16, %rsp\n"
+                            "\tmovl\t%edi, -4(%rbp)\n"
+                            "\tmovl\t-4(%rbp), %eax\n"
+                            "\tmovl\t%eax, %esi\n"
+                            "\tleaq	.LC0(%rip), %rdi\n"
+                            "\tmovl	$0, %eax\n"
+                            "\tcall	printf@PLT\n"
+                            "\tnop\n"
+                            "\tleave\n"
+                            "\tret\n"
+                            "\n"
+                            "\t.globl\tmain\n"
+                            "\t.type\tmain, @function\n"
+                            "main:\n"
+                            "\tpushq\t%rbp\n"
+                            "\tmovq	%rsp, %rbp\n";
+        }
+
+        // Print out the assembly postamble
+        void asm_postamble() {
+            outputFile << 	"\tmovl	$0, %eax\n"
+	                        "\tpopq	%rbp\n"
+	                        "\tret\n";
+        }
+
+        int asm_add(int r1, int r2) {
+            outputFile << "\taddq\t" << reglist[r1] << ", " << reglist[r2] << "\n";
+            free_register(r1);
+            return r2;
+        }
+
+        int asm_sub(int r1, int r2) {
+            outputFile << "\tsubq\t" << reglist[r2] << ", " << reglist[r1] << "\n";
+            free_register(r2);
+            return r1;
+        }
+
+        int asm_mul(int r1, int r2) {
+            outputFile << "\tmulq\t" << reglist[r1] << ", " << reglist[r2] << "\n";
+            free_register(r1);
+            return r2;
+        }
+
+        int asm_div(int r1, int r2) {
+            outputFile << "\tmovq\t" << reglist[r1] << "%rax\n";
+            outputFile << "\tcqo\n";
+            outputFile << "\tidivq\t" << reglist[r2] << "\n";
+            outputFile << "\tmovq\t%rax, " << reglist[r1] << "\n";
+            free_register(r2);
+            return r1;
+        }
+
+        int asm_load(int value) {
+            int r = alloc_register(); // allocate a free register
+            outputFile << "\tmovq\t$" << value << ", " << reglist[r] << "\n";
+            return r;
+        }
+
+        // call printint with a certain register
+        void asm_printint(int r) {
+            outputFile << "\tmovq\t" << reglist[r] << ", %rdi\n";
+            outputFile << "\tcall\tprintint\n";
+            free_register(r);
         }
 };
 
@@ -292,9 +397,9 @@ int main(int argc, char** argv) {
         exit(1);
     }
 
-    Parser parser(argv[1]);
-    parser.traverseAST();
-    cout << parser.interpretAST() << endl;
+    Compiler compiler(argv[1]);
+    compiler.traverseAST();
+    compiler.generateAssembly();
 
     return 0;
 }
