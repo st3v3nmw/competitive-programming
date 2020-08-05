@@ -4,5 +4,6 @@ Following [DoctorWkt's A compiler writing journey](https://github.com/DoctorWkt/
 
 ## To-Do
 
-Left shift, right shift operations
-Floating point numbers
+Left shift, right shift operations\
+Floating point numbers\
+Pratt parsing

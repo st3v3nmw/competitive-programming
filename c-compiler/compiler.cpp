@@ -9,8 +9,11 @@ string tokstr[] = {"+", "-", "*", "/", "intlit"};
 
 // Tokens
 enum {
-  T_PLUS, T_MINUS, T_STAR, T_SLASH, T_INTLIT, T_EOF
+  T_EOF, T_PLUS, T_MINUS, T_STAR, T_SLASH, T_INTLIT
 };
+
+// operator precedence for each token
+static int opPrec[] = {0, 1, 1, 2, 2, 0}; // EOF, +, -, *, /, INT_LIT
 
 class Token {
     public:
@@ -56,14 +59,8 @@ class ASTNode {
             right = right_node;
         }
 
-        ASTNode(int op, int value, shared_ptr<ASTNode> left_node) {
-            init(op, value);
-            left = left_node;
-            right = NULL;
-        }
-
         void traverse() {
-            // print in preorder
+            // print in preorder (prefix notation)
             if (op == A_INTLIT)
                 cout << value << " ";
             else
@@ -103,27 +100,52 @@ class Parser {
             n_line = 1, line_pos = 0;
             token = Token();
             scanChars();
-            root = parse();
+            root = parse(0);
         }
 
-        shared_ptr<ASTNode> parse() { // scan & parse all tokens of the input file
-            shared_ptr<ASTNode> left = primary();
+        // return a tokenType's precedence
+        int opPrecedence(int tokenType) {
+            int prec = opPrec[tokenType];
+            if (prec == 0) {
+                printf("Syntax error on line %d:%d, token %d\n", n_line, line_pos, tokenType);
+                exit(1);
+            }
+            return prec;
+        }
 
-            // base case, not tokens left
-            if (token.getToken() == T_EOF)
+        // return an AST tree whose root is a binary operator
+        // Parameter ptp is the previous token's precedence
+        shared_ptr<ASTNode> parse(int ptp) {
+            shared_ptr<ASTNode> left, right;
+            left = primary(); // build the left sub-tree
+
+            int tokenType = token.getToken();
+            // base case, no tokens left
+            if (tokenType == T_EOF)
                 return left;
 
-            int nodeType = arithOp(token.getToken());
+            // while the precedence of this token
+            // is more than that of the previous token precedence
+            while (opPrecedence(tokenType) > ptp) {
+                scanChars();
 
-            scanChars(); // get next token
+                // recursively call parse with the precedence
+                // of our token to build a sub-tree
+                right = parse(opPrec[tokenType]);
 
-            shared_ptr<ASTNode> right = parse(); // get right subtree
+                // join the right sub-tree above with the tree we already have
+                shared_ptr<ASTNode> left2(new ASTNode(arithOp(tokenType), 0, left, right));
+                left = left2;
 
-            // build & return a complete AST node
-            shared_ptr<ASTNode> result(new ASTNode(nodeType, 0, left, right));
-            return result;
+                tokenType = token.getToken();
+                if (tokenType == T_EOF)
+                    break;
+            }
+
+            return left;
         }
 
+        // return a node with a number (T_INTLIT)
         shared_ptr<ASTNode> primary() {
             switch (token.getToken()) {
                 case T_INTLIT:
