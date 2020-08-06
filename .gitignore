@@ -1,7 +1,3 @@
-*
-!*/
-!*.*
-!LICENSE
 *.class
 */*.class
 */__pycache__/*
