@@ -2,6 +2,9 @@
 #include <fstream>
 #include <memory>
 #include <cstring>
+#include <map>
+#include <sys/wait.h>
+#include <unistd.h>
 
 #define IDENT_LIM 256 // limit on identifier length
 #define IDENT_BUFFER_LEN IDENT_LIM + 1
@@ -13,7 +16,7 @@ string tokstr[] = {"+", "-", "*", "/", "intlit"};
 
 // Tokens
 enum {
-  T_EOF, T_PLUS, T_MINUS, T_STAR, T_SLASH, T_INTLIT, T_PRINT, T_SEMI
+  T_EOF, T_PLUS, T_MINUS, T_STAR, T_SLASH, T_INTLIT, T_PRINT, T_SEMI, T_INT, T_EQUALS, T_IDENT
 };
 
 // operator precedence for each token
@@ -45,7 +48,7 @@ class Token {
 
 // AST node types
 enum {
-  A_ADD, A_SUBTRACT, A_MULTIPLY, A_DIVIDE, A_INTLIT
+  A_ADD, A_SUBTRACT, A_MULTIPLY, A_DIVIDE, A_INTLIT, A_LVIDENT, A_ASSIGN, A_IDENT
 };
 
 // Abstract Syntax Tree node
@@ -80,6 +83,7 @@ class ASTNode {
     private:
         int op; // operation to be performed
         int value; // For A_INTLIT's integer value
+        int id; // for A_IDENTm the symbol slot
         shared_ptr<ASTNode> left, right; // these f[a-z]*ing pointers :(
 
         void init(int op, int value) {
@@ -122,8 +126,8 @@ class Compiler {
 
             // parse and generate assembly code
             token = Token();
-            scanChars();
-            parse();
+            scanChars(); // get the 1st token
+            parse(); // parse the statements
             cout << filename << " parsed successfully :)" << endl;
 
             // output postamble
@@ -134,23 +138,82 @@ class Compiler {
         /* scanning and parsing */
     
         void parse() {
-            int reg;
             while (1) {
-                // match a 'print' as the first token
-                match(T_PRINT, "print");
-
-                // parse the expression & generate the assembly code
-                root = binexpr(0);
-                reg = genASM(root);
-                asm_printint(reg);
-                free_all_registers();
-                
-                // match the following semicolon
-                // stop of we're at EOF
-                match(T_SEMI, ";");
-                if (token.getToken() == T_EOF)
-                    return;
+                switch (token.getToken()) {
+                    case T_PRINT:
+                        print_statement();
+                        break;
+                    case T_INT:
+                        var_declaration();
+                        break;
+                    case T_IDENT:
+                        assignment_statement();
+                        break;
+                    case T_EOF:
+                        return;
+                    default:
+                        error_exit("Syntax error, token", token.getToken());
+                }
             }
+        }
+
+        // handle a print statement
+        void print_statement() {
+            int reg;
+            // match a 'print' as the first token
+            match(T_PRINT, "print");
+
+            // parse the expression & generate the assembly code
+            root = binexpr(0);
+            reg = genASM(root, -1);
+            asm_printint(reg);
+            free_all_registers();
+            semi();
+        }
+
+        // handle a declaration statement
+        void var_declaration() {
+            // int then identifier then semicolon ;
+            match(T_INT, "int");
+            ident();
+            string name(buf);
+            addglob(name);
+            asm_globsym();
+            semi();
+        }
+
+        // handle an assignment statement
+        void assignment_statement() {
+            shared_ptr<ASTNode> left;
+            int id;
+
+            // ensure we have an identifier
+            ident();
+
+            // check if it's been defined then make a leaf node for it
+            string name(buf);
+            if ((id = findglob(name)) == -1) {
+                print_global_table();
+                error_exit("Undeclared variable", name);
+            }
+
+            shared_ptr<ASTNode> right(new ASTNode(A_LVIDENT, id));
+
+            // ensure we have an equals sign
+            match(T_EQUALS, "=");
+
+            // parse the following expressino
+            left = binexpr(0);
+
+            // make an assignment AST tree
+            shared_ptr<ASTNode> tree(new ASTNode(A_ASSIGN, 0, left, right));
+
+            // generate the assembly code
+            genASM(tree, -1);
+            free_all_registers();
+
+            // match the semicolon
+            semi();
         }
 
         // ensure that the current token is t and fetch the next token
@@ -159,9 +222,18 @@ class Compiler {
             if (token.getToken() == t) {
                 scanChars();
             } else {
-                cout << what << " expected on line " << n_line << endl;
-                error_exit();
+                error_exit(what, "expected on line");
             }
+        }
+
+        // match a semicolon
+        inline void semi() {
+            match(T_SEMI, ";");
+        }
+
+        // match an identifier
+        inline void ident() {
+            match(T_IDENT, "identifier");
         }
 
         // return an AST tree whose root is a binary operator
@@ -205,6 +277,17 @@ class Compiler {
                         scanChars();
                         return node; 
                     }
+                case T_IDENT:
+                    {
+                        // check that this identifier exists
+                        string name(buf);
+                        int id = findglob(name);
+                        if (id == -1) {
+                            error_exit("Unknown variable", name);
+                        }
+                        shared_ptr<ASTNode> node(new ASTNode(A_IDENT, id));
+                        return node;
+                    }
                 default:
                     printf("Syntax error on line %d:%d\n", n_line, line_pos);
                     exit(1);
@@ -233,6 +316,9 @@ class Compiler {
                 case ';':
                     token.setToken(T_SEMI);
                     break;
+                case '=':
+                    token.setToken(T_EQUALS);
+                    break;
                 default:
                     if (isdigit(c)) {
                         token.setValue(scanint()); // if it's a digit, scan the literal integer value
@@ -249,13 +335,12 @@ class Compiler {
                             break;
                         }
 
-                        // not a recognized keyword
-                        printf("Unrecognized symbol %s on line %d\n", buf, n_line);
-                        error_exit();
+                        // not a recognized keyword, so it must be an identifier
+                        token.setToken(T_IDENT);
+                        break;
                     }
 
-                    printf("Unrecognized character %c on line %d:%d\n", c, n_line, line_pos);
-                    error_exit();
+                    error_exit("Unrecognized character", c);
             }
             return 1; // we found a token
         }
@@ -281,8 +366,7 @@ class Compiler {
                 // error if we reach the identifier length limit,
                 // else append to buf and get next char
                 if (ident_lim - 1 == i) {
-                    printf("Identifier too long on line %d\n", n_line);
-                    error_exit();
+                    error_exit("Identifier too long on", "");
                 };
                 buf[i++] = c;
                 next();
@@ -302,6 +386,10 @@ class Compiler {
                 case 'p':
                     if (!strcmp(buf, "print"))
                         return T_PRINT;
+                    break;
+                case 'i':
+                    if (!strcmp(buf, "int"))
+                        return T_INT;
                     break;
             }
             return 0;
@@ -347,8 +435,7 @@ class Compiler {
         int opPrecedence(int tokenType) {
             int prec = opPrec[tokenType];
             if (prec == 0) {
-                printf("Syntax error on line %d:%d, token %d\n", n_line, line_pos, tokenType);
-                error_exit();
+                error_exit("Syntax error, token", tokenType);
             }
             return prec;
         }
@@ -357,13 +444,13 @@ class Compiler {
         /* code generation */
 
         // given an AST, generate assembly code recursively
-        int genASM(shared_ptr<ASTNode> node) {
+        int genASM(shared_ptr<ASTNode> node, int reg) {
             // int leftval = 0, rightval = 0;
             int leftreg, rightreg;
 
             // get the values of the left and right subtrees
-            if (node->left)  leftreg  = genASM(node->left);
-            if (node->right) rightreg = genASM(node->right);
+            if (node->left)  leftreg  = genASM(node->left, -1);
+            if (node->right) rightreg = genASM(node->right, leftreg);
 
             switch (node->op) {
                 case A_ADD:      return asm_add(leftreg, rightreg);
@@ -371,10 +458,37 @@ class Compiler {
                 case A_MULTIPLY: return asm_mul(leftreg, rightreg);
                 case A_DIVIDE:   return asm_div(leftreg, rightreg);
                 case A_INTLIT:   return asm_load(node->value);
+                case A_IDENT:    return asm_load_glob(Gsym[node->id]);
+                case A_LVIDENT:  return asm_store_glob(reg, Gsym[node->id]);
+                case A_ASSIGN:
+                    // the work has already been done
+                    return rightreg;
                 default:
                     printf("Unknown AST operator %d\n", node->op);
                     exit(1);
             }
+        }
+
+        // add a global symbol to the symbol table
+        inline int addglob(string name) {
+            int y;
+            // if symbol's already in symbol table
+            if ((y = findglob(name)) != -1)
+                return y;
+            // otherwise, get a new slot
+            y = n_globs++;
+            Gsym[y] = name;
+            return y;
+        }
+
+        // find if a glob exists
+        inline int findglob(string name) {
+            int i;
+            for (i = 0; i < Gsym.size(); i++) {
+                if (Gsym[i] == name)
+                    return i;
+            }
+            return -1;
         }
 
         // allocate a ree register
@@ -392,8 +506,7 @@ class Compiler {
         // free a register
         void free_register(int reg) {
             if (freereg[reg] != 0) {
-                cerr << "Error trying to free register " << reg << endl;
-                error_exit();
+                error_exit("Error trying to free register", reg);
             }
             freereg[reg] = 1;
         }
@@ -463,9 +576,23 @@ class Compiler {
             return r1;
         }
 
+        // load an integer literal value into a register
         int asm_load(int value) {
             int r = alloc_register(); // allocate a free register
             outputFile << "\tmovq\t$" << value << ", " << reglist[r] << "\n";
+            return r;
+        }
+
+        // load a value from a variable into a register
+        int asm_load_glob(string identifier) {
+            int r = alloc_register();
+            outputFile << "\tmovq\t" << identifier << "%s(\%rip), " << reglist[r] << "\n";
+            return r;
+        }
+
+        // store a register's value into a register
+        int asm_store_glob(int r, string identifier) {
+            outputFile << "\tmovq\t" << reglist[r] << ", " << identifier << "(\%rip)\n";
             return r;
         }
 
@@ -476,6 +603,12 @@ class Compiler {
             free_register(r);
         }
 
+        // generate a global symbol
+        void asm_globsym() {
+            string name(buf);
+            outputFile << "\t.comm\t" << name << ",8,8\n";
+        }
+
 
         /* debugging */
 
@@ -484,7 +617,25 @@ class Compiler {
             cout << endl;
         }
 
-        inline void error_exit() {
+        template <typename T>
+        inline void error_exit(string err_msg, T extra) {
+            cerr << err_msg << " " << extra << " on line " << n_line << ":" << line_pos << endl;
+
+            // print the backtrace using gdb
+            char pid_buf[32];
+            sprintf(pid_buf, "%d", getpid());
+            char name_buf[512];
+            name_buf[readlink("/proc/self/exe", name_buf, 511)] = 0;
+            int child_pid = fork();
+            if (!child_pid) {
+                dup2(2, 1); // redirect output to stderr
+                fprintf(stdout, "\nStack trace for %s pid=%s\n", name_buf, pid_buf);
+                execlp("gdb", "gdb", "--batch", "-n", "-ex", "thread", "-ex", "bt", name_buf, pid_buf, NULL);
+                abort(); // if gdb failed to start
+            } else {
+                waitpid(child_pid, NULL, 0);
+            }
+
             // delete created ASM output file
             int len = outputPath.length();
             char outputPath2[len + 1];
@@ -495,6 +646,11 @@ class Compiler {
             outputPath2[len] = '\0';
             remove(outputPath2);
             exit(1);
+        }
+
+        void print_global_table() {
+            for (int i = 0; i < Gsym.size(); i++)
+                cout << Gsym[i] << " " << i << endl;
         }
     
     private:
@@ -511,7 +667,9 @@ class Compiler {
         ofstream outputFile;
         string outputPath;
         int freereg[4] = {1, 1, 1, 1};
+        int n_globs = 0; // number of globals
         string reglist[4] = {"%r8", "%r9", "%r10", "%r11"};
+        map<int, string> Gsym; // store global variables
 };
 
 int main(int argc, char** argv) {
@@ -520,7 +678,7 @@ int main(int argc, char** argv) {
         exit(1);
     }
 
-    Compiler compiler(argv[1]);
+    Compiler compiler(argv[1]) ;
     // compiler.traverseAST();
     // compiler.generateAssembly();
 
