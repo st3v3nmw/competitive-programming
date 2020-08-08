@@ -1,5 +1,7 @@
-int fred;
-int jim;
-fred = 5;
-jim = 12;
-print fred + jim;
+int foo;
+int bar;
+foo = 123;
+bar = 2;
+print foo;
+print bar;
+print foo + 5 - 6 * 30 / bar;

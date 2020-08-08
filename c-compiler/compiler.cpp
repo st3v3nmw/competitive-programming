@@ -12,15 +12,26 @@
 using namespace std;
 
 // list of printable tokens
-string tokstr[] = {"+", "-", "*", "/", "intlit"};
+string tokstr[] = {"+", "-", "*", "/", "==", "!=", "<", ">", "<=", ">=", "intlit", ";", "=", "identifier", "print", "int"};
 
 // Tokens
 enum {
-  T_EOF, T_PLUS, T_MINUS, T_STAR, T_SLASH, T_INTLIT, T_PRINT, T_SEMI, T_INT, T_EQUALS, T_IDENT
+  T_EOF,
+  T_PLUS, T_MINUS,  // additive operators
+  T_STAR, T_SLASH,  // multiplicative operators
+  T_EQ, T_NEQ,       // ==, !=
+  T_LT, T_GT, T_LE, T_GE, // <, >, <=, >=
+  T_INTLIT, T_SEMI, T_ASSIGN, T_IDENT,
+  T_PRINT, T_INT // keywords
 };
 
 // operator precedence for each token
-static int opPrec[] = {0, 1, 1, 2, 2, 0}; // EOF, +, -, *, /, INT_LIT
+static int opPrec[] = {
+    0, 1, 1,    // T_EOF, T_PLUS, T_MINUS
+    2, 2,       // T_STAR, T_SLASH
+    3, 3,       // T_EQ, T_NEQ
+    4, 4, 4, 4  // T_LT, T_GT, T_LE, T_GE
+};
 
 class Token {
     public:
@@ -48,7 +59,10 @@ class Token {
 
 // AST node types
 enum {
-  A_ADD, A_SUBTRACT, A_MULTIPLY, A_DIVIDE, A_INTLIT, A_LVIDENT, A_ASSIGN, A_IDENT
+  A_ADD=1, A_SUBTRACT, A_MULTIPLY, A_DIVIDE,
+  A_EQ, A_NEQ, A_LT, A_GT, A_LE, A_GE,
+  A_INTLIT,
+  A_IDENT, A_LVIDENT, A_ASSIGN
 };
 
 // Abstract Syntax Tree node
@@ -82,8 +96,7 @@ class ASTNode {
 
     private:
         int op; // operation to be performed
-        int value; // For A_INTLIT's integer value
-        int id; // for A_IDENTm the symbol slot
+        int value; // For A_INTLIT's integer value or for A_IDENT the symbol slot
         shared_ptr<ASTNode> left, right; // these f[a-z]*ing pointers :(
 
         void init(int op, int value) {
@@ -122,7 +135,7 @@ class Compiler {
             outputFile.swap(outputFl);
 
             // output preamble
-            asm_preamble();
+            cg_preamble();
 
             // parse and generate assembly code
             token = Token();
@@ -131,7 +144,7 @@ class Compiler {
             cout << filename << " parsed successfully :)" << endl;
 
             // output postamble
-            asm_postamble();
+            cg_postamble();
         }
 
 
@@ -166,7 +179,7 @@ class Compiler {
             // parse the expression & generate the assembly code
             root = binexpr(0);
             reg = genASM(root, -1);
-            asm_printint(reg);
+            cg_printint(reg);
             free_all_registers();
             semi();
         }
@@ -178,7 +191,7 @@ class Compiler {
             ident();
             string name(buf);
             addglob(name);
-            asm_globsym();
+            cg_globsym();
             semi();
         }
 
@@ -192,15 +205,13 @@ class Compiler {
 
             // check if it's been defined then make a leaf node for it
             string name(buf);
-            if ((id = findglob(name)) == -1) {
-                print_global_table();
+            if ((id = findglob(name)) == -1)
                 error_exit("Undeclared variable", name);
-            }
 
             shared_ptr<ASTNode> right(new ASTNode(A_LVIDENT, id));
 
-            // ensure we have an equals sign
-            match(T_EQUALS, "=");
+            // ensure we have an assignment operator
+            match(T_ASSIGN, "=");
 
             // parse the following expressino
             left = binexpr(0);
@@ -286,6 +297,7 @@ class Compiler {
                             error_exit("Unknown variable", name);
                         }
                         shared_ptr<ASTNode> node(new ASTNode(A_IDENT, id));
+                        scanChars();
                         return node;
                     }
                 default:
@@ -317,7 +329,38 @@ class Compiler {
                     token.setToken(T_SEMI);
                     break;
                 case '=':
-                    token.setToken(T_EQUALS);
+                    next();
+                    if (c == '=') // ==
+                        token.setToken(T_EQ);
+                    else {
+                        inputFile.putback(c);
+                        token.setToken(T_ASSIGN);
+                    }
+                    break;
+                case '!':
+                    next();
+                    if (c == '=')
+                        token.setToken(T_NEQ);
+                    else
+                        error_exit("Unrecognized character", c);
+                    break;
+                case '<':
+                    next();
+                    if (c == '=')
+                        token.setToken(T_LE);
+                    else {
+                        inputFile.putback(c);
+                        token.setToken(T_LT);
+                    }
+                    break;
+                case '>':
+                    next();
+                    if (c == '=')
+                        token.setToken(T_GE);
+                    else {
+                        inputFile.putback(c);
+                        token.setToken(T_GT);
+                    }
                     break;
                 default:
                     if (isdigit(c)) {
@@ -419,16 +462,12 @@ class Compiler {
         }
 
         // convert a token into an AST operation
-        int arithOp(int tok) {
-            switch (tok) {
-                case T_PLUS:  return A_ADD;
-                case T_MINUS: return A_SUBTRACT;
-                case T_STAR:  return A_MULTIPLY;
-                case T_SLASH: return A_DIVIDE;
-                default:
-                    printf("Unknown token %d in arithop() on line %d\n", tok, n_line);
-                    exit(1);
-            }
+        // 1:1 mapping
+        int arithOp(int tokenType) {
+            if (tokenType > T_EOF && tokenType < T_INTLIT)
+                return tokenType;
+            error_exit("Unknown token", tokstr[tokenType]);
+            return -1; // unreachable code
         }
 
         // return a tokenType's precedence
@@ -453,16 +492,20 @@ class Compiler {
             if (node->right) rightreg = genASM(node->right, leftreg);
 
             switch (node->op) {
-                case A_ADD:      return asm_add(leftreg, rightreg);
-                case A_SUBTRACT: return asm_sub(leftreg, rightreg);
-                case A_MULTIPLY: return asm_mul(leftreg, rightreg);
-                case A_DIVIDE:   return asm_div(leftreg, rightreg);
-                case A_INTLIT:   return asm_load(node->value);
-                case A_IDENT:    return asm_load_glob(Gsym[node->id]);
-                case A_LVIDENT:  return asm_store_glob(reg, Gsym[node->id]);
-                case A_ASSIGN:
-                    // the work has already been done
-                    return rightreg;
+                case A_ADD:      return cg_add(leftreg, rightreg);
+                case A_SUBTRACT: return cg_sub(leftreg, rightreg);
+                case A_MULTIPLY: return cg_mul(leftreg, rightreg);
+                case A_DIVIDE:   return cg_div(leftreg, rightreg);
+                case A_INTLIT:   return cg_load(node->value);
+                case A_IDENT:    return cg_load_glob(Gsym[node->value]);
+                case A_LVIDENT:  return cg_store_glob(reg, Gsym[node->value]);
+                case A_ASSIGN:   return rightreg; // the work has already been done
+                case A_EQ:       return cg_equal(leftreg, rightreg);
+                case A_NEQ:      return cg_not_equal(leftreg, rightreg);
+                case A_LT:       return cg_less_than(leftreg, rightreg);
+                case A_GT:       return cg_greater_than(leftreg, rightreg);
+                case A_LE:       return cg_less_equal(leftreg, rightreg);
+                case A_GE:       return cg_greater_equal(leftreg, rightreg);
                 default:
                     printf("Unknown AST operator %d\n", node->op);
                     exit(1);
@@ -473,8 +516,10 @@ class Compiler {
         inline int addglob(string name) {
             int y;
             // if symbol's already in symbol table
-            if ((y = findglob(name)) != -1)
-                return y;
+            if ((y = findglob(name)) != -1) {
+                // return y;
+                error_exit("Redeclaration of", name);
+            }
             // otherwise, get a new slot
             y = n_globs++;
             Gsym[y] = name;
@@ -483,10 +528,9 @@ class Compiler {
 
         // find if a glob exists
         inline int findglob(string name) {
-            int i;
-            for (i = 0; i < Gsym.size(); i++) {
-                if (Gsym[i] == name)
-                    return i;
+            for (auto it = Gsym.begin(); it != Gsym.end(); ++it) {
+                if (it->second == name)
+                    return it->first;
             }
             return -1;
         }
@@ -517,7 +561,7 @@ class Compiler {
         }
 
         // Print out the assembly preamble
-        void asm_preamble() {
+        void cg_preamble() {
             outputFile <<   "\t.text\n"
                             ".LC0:\n"
                             "\t.string\t\"%d\\n\"\n"
@@ -543,31 +587,31 @@ class Compiler {
         }
 
         // Print out the assembly postamble
-        void asm_postamble() {
+        void cg_postamble() {
             outputFile << 	"\tmovl	$0, %eax\n"
 	                        "\tpopq	%rbp\n"
 	                        "\tret\n";
         }
 
-        int asm_add(int r1, int r2) {
+        int cg_add(int r1, int r2) {
             outputFile << "\taddq\t" << reglist[r1] << ", " << reglist[r2] << "\n";
             free_register(r1);
             return r2;
         }
 
-        int asm_sub(int r1, int r2) {
+        int cg_sub(int r1, int r2) {
             outputFile << "\tsubq\t" << reglist[r2] << ", " << reglist[r1] << "\n";
             free_register(r2);
             return r1;
         }
 
-        int asm_mul(int r1, int r2) {
+        int cg_mul(int r1, int r2) {
             outputFile << "\timulq\t" << reglist[r1] << ", " << reglist[r2] << "\n";
             free_register(r1);
             return r2;
         }
 
-        int asm_div(int r1, int r2) {
+        int cg_div(int r1, int r2) {
             outputFile << "\tmovq\t" << reglist[r1] << ", %rax\n";
             outputFile << "\tcqo\n";
             outputFile << "\tidivq\t" << reglist[r2] << "\n";
@@ -577,37 +621,54 @@ class Compiler {
         }
 
         // load an integer literal value into a register
-        int asm_load(int value) {
+        int cg_load(int value) {
             int r = alloc_register(); // allocate a free register
             outputFile << "\tmovq\t$" << value << ", " << reglist[r] << "\n";
             return r;
         }
 
         // load a value from a variable into a register
-        int asm_load_glob(string identifier) {
+        int cg_load_glob(string identifier) {
             int r = alloc_register();
-            outputFile << "\tmovq\t" << identifier << "%s(\%rip), " << reglist[r] << "\n";
+            outputFile << "\tmovq\t" << identifier << "(\%rip), " << reglist[r] << "\n";
             return r;
         }
 
         // store a register's value into a register
-        int asm_store_glob(int r, string identifier) {
+        int cg_store_glob(int r, string identifier) {
             outputFile << "\tmovq\t" << reglist[r] << ", " << identifier << "(\%rip)\n";
             return r;
         }
 
         // call printint with a certain register
-        void asm_printint(int r) {
+        void cg_printint(int r) {
             outputFile << "\tmovq\t" << reglist[r] << ", %rdi\n";
             outputFile << "\tcall\tprintint\n";
             free_register(r);
         }
 
         // generate a global symbol
-        void asm_globsym() {
+        void cg_globsym() {
             string name(buf);
             outputFile << "\t.comm\t" << name << ",8,8\n";
         }
+
+        // compare two registers
+        int cg_compare(int r1, int r2, string how) {
+            outputFile << "\tcmpq\t" << reglist[r2] << ", " << reglist[r1] << "\n";
+            outputFile << "\t" << how << "\t" << breglist[r2] << "\n";
+            outputFile << "\tandq\t$255," << reglist[r2] << "\n";
+            free_register(r1);
+            return r2;
+        }
+
+        int cg_equal(int r1, int r2) { return cg_compare(r1, r2, "sete");}
+        int cg_not_equal(int r1, int r2) { return cg_compare(r1, r2, "setne");}
+        int cg_less_than(int r1, int r2) { return cg_compare(r1, r2, "setl");}
+        int cg_greater_than(int r1, int r2) { return cg_compare(r1, r2, "setg");}
+        int cg_less_equal(int r1, int r2) { return cg_compare(r1, r2, "setle");
+        }
+        int cg_greater_equal(int r1, int r2) { return cg_compare(r1, r2, "setge");}
 
 
         /* debugging */
@@ -648,9 +709,9 @@ class Compiler {
             exit(1);
         }
 
-        void print_global_table() {
-            for (int i = 0; i < Gsym.size(); i++)
-                cout << Gsym[i] << " " << i << endl;
+        void print_symbol_table() {
+            for (auto it = Gsym.begin(); it != Gsym.end(); ++it)
+                cout << it->first << " " << it->second << "\n";
         }
     
     private:
@@ -668,7 +729,8 @@ class Compiler {
         string outputPath;
         int freereg[4] = {1, 1, 1, 1};
         int n_globs = 0; // number of globals
-        string reglist[4] = {"%r8", "%r9", "%r10", "%r11"};
+        const string reglist[4] = {"%r8", "%r9", "%r10", "%r11"};
+        const string breglist[4] = { "%r8b", "%r9b", "%r10b", "%r11b" };
         map<int, string> Gsym; // store global variables
 };
 
@@ -679,6 +741,7 @@ int main(int argc, char** argv) {
     }
 
     Compiler compiler(argv[1]) ;
+    // compiler.print_symbol_table();
     // compiler.traverseAST();
     // compiler.generateAssembly();
 
