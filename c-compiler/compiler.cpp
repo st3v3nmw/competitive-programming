@@ -8,11 +8,19 @@
 
 #define IDENT_LIM 256 // limit on identifier length
 #define IDENT_BUFFER_LEN IDENT_LIM + 1
+#define NOREG -1
 
 using namespace std;
 
 // list of printable tokens
-string tokstr[] = {"+", "-", "*", "/", "==", "!=", "<", ">", "<=", ">=", "intlit", ";", "=", "identifier", "print", "int"};
+string tokstr[] = {
+    "eof",
+    "+", "-", "*", "/",
+    "==", "!=", "<", ">", "<=", ">=",
+    "intlit", ";", "=", "identifier",
+    "{", "}", "(", ")",
+    "print", "int", "if", "else"
+};
 
 // Tokens
 enum {
@@ -22,7 +30,8 @@ enum {
   T_EQ, T_NEQ,       // ==, !=
   T_LT, T_GT, T_LE, T_GE, // <, >, <=, >=
   T_INTLIT, T_SEMI, T_ASSIGN, T_IDENT,
-  T_PRINT, T_INT // keywords
+  T_LBRACE, T_RBRACE, T_LPAREN, T_RPAREN,
+  T_PRINT, T_INT, T_IF, T_ELSE // keywords
 };
 
 // operator precedence for each token
@@ -59,10 +68,11 @@ class Token {
 
 // AST node types
 enum {
-  A_ADD=1, A_SUBTRACT, A_MULTIPLY, A_DIVIDE,
+  A_ADD = 1, A_SUBTRACT, A_MULTIPLY, A_DIVIDE,
   A_EQ, A_NEQ, A_LT, A_GT, A_LE, A_GE,
   A_INTLIT,
-  A_IDENT, A_LVIDENT, A_ASSIGN
+  A_IDENT, A_LVIDENT, A_ASSIGN,
+  A_PRINT, A_GLUE, A_IF
 };
 
 // Abstract Syntax Tree node
@@ -78,6 +88,18 @@ class ASTNode {
             init(op, value);
             left = left_node;
             right = right_node;
+        }
+
+        ASTNode(int op, int value, shared_ptr<ASTNode> left_node, shared_ptr<ASTNode> mid_node, shared_ptr<ASTNode> right_node) {
+            init(op, value);
+            left = left_node;
+            mid = mid_node;
+            right = right_node;
+        }
+
+        ASTNode(int op, int value, shared_ptr<ASTNode> left_node) { // unary
+            init(op, value);
+            left = left_node;
         }
 
         void traverse() {
@@ -97,9 +119,9 @@ class ASTNode {
     private:
         int op; // operation to be performed
         int value; // For A_INTLIT's integer value or for A_IDENT the symbol slot
-        shared_ptr<ASTNode> left, right; // these f[a-z]*ing pointers :(
+        shared_ptr<ASTNode> left, mid, right; // these f[a-z]*ing pointers :(
 
-        void init(int op, int value) {
+        inline void init(int op, int value) {
             ASTNode::op = op;
             ASTNode::value = value;
         }
@@ -140,8 +162,10 @@ class Compiler {
             // parse and generate assembly code
             token = Token();
             scanChars(); // get the 1st token
-            parse(); // parse the statements
+            root = compound_statement(); // parse the statements
             cout << filename << " parsed successfully :)" << endl;
+
+            genASM(root, NOREG, 0);
 
             // output postamble
             cg_postamble();
@@ -150,58 +174,80 @@ class Compiler {
 
         /* scanning and parsing */
     
-        void parse() {
+        shared_ptr<ASTNode> compound_statement() {
+            shared_ptr<ASTNode> left = NULL, tree;
+
+            match(T_LBRACE, "{");
+
             while (1) {
                 switch (token.getToken()) {
                     case T_PRINT:
-                        print_statement();
+                        tree = print_statement();
                         break;
                     case T_INT:
                         var_declaration();
+                        tree = NULL;
                         break;
                     case T_IDENT:
-                        assignment_statement();
+                        tree = assignment_statement();
                         break;
-                    case T_EOF:
-                        return;
+                    case T_IF:
+                        tree = if_statement();
+                        break;
+                    case T_RBRACE:
+                        // when we hit a }, we skip past it and return the AST
+                        match(T_RBRACE, "}");
+                        return left;
                     default:
                         error_exit("Syntax error, token", token.getToken());
+                }
+
+                // for each new tree, either save it in left if it's empty, or glue the left and the new tree together
+                if (tree) {
+                    if (left == NULL)
+                        left = tree;
+                    else {
+                        shared_ptr<ASTNode> left2(new ASTNode(A_GLUE, 0, left, NULL, tree));
+                        left = left2;
+                    }
                 }
             }
         }
 
         // handle a print statement
-        void print_statement() {
+        shared_ptr<ASTNode> print_statement() {
+            shared_ptr<ASTNode> node;
             int reg;
             // match a 'print' as the first token
             match(T_PRINT, "print");
 
             // parse the expression & generate the assembly code
-            root = binexpr(0);
-            reg = genASM(root, -1);
-            cg_printint(reg);
-            free_all_registers();
-            semi();
+            node = binexpr(0);
+
+            shared_ptr<ASTNode> node2(new ASTNode(A_PRINT, 0, node));
+
+            match(T_SEMI, ";");
+            return node2;
         }
 
         // handle a declaration statement
         void var_declaration() {
             // int then identifier then semicolon ;
             match(T_INT, "int");
-            ident();
+            match(T_IDENT, "identifier");
             string name(buf);
             addglob(name);
             cg_globsym();
-            semi();
+            match(T_SEMI, ";");
         }
 
         // handle an assignment statement
-        void assignment_statement() {
+        shared_ptr<ASTNode> assignment_statement() {
             shared_ptr<ASTNode> left;
             int id;
 
             // ensure we have an identifier
-            ident();
+            match(T_IDENT, "identifier");
 
             // check if it's been defined then make a leaf node for it
             string name(buf);
@@ -217,14 +263,41 @@ class Compiler {
             left = binexpr(0);
 
             // make an assignment AST tree
-            shared_ptr<ASTNode> tree(new ASTNode(A_ASSIGN, 0, left, right));
-
-            // generate the assembly code
-            genASM(tree, -1);
-            free_all_registers();
+            shared_ptr<ASTNode> tree(new ASTNode(A_ASSIGN, 0, left, NULL, right));
 
             // match the semicolon
-            semi();
+            match(T_SEMI, ";");
+            return tree;
+        }
+
+        shared_ptr<ASTNode> if_statement() {
+            shared_ptr<ASTNode> condAST, trueAST, falseAST = NULL;
+
+            // ensure we have 'if' '('
+            match(T_IF, "if");
+            match(T_LPAREN, "(");
+
+            // parse the following expression and the ')' following.
+            // Ensure the tree's op is a comparison.
+            condAST = binexpr(0);
+
+            if (condAST->op < A_EQ || condAST->op > A_GE)
+                error_exit("Bad comparison operator", condAST->op);
+            match(T_RPAREN, ")");
+            
+            // get the AST for the compound statement
+            trueAST = compound_statement();
+
+            // If we have an 'else', skip it
+            // and get the AST for the compound statement
+            if (token.getToken() == T_ELSE) {
+                scanChars();
+                falseAST = compound_statement();
+            }
+
+            // build and return the AST
+            shared_ptr<ASTNode> r(new ASTNode(A_IF, 0, condAST, trueAST, falseAST));
+            return r;
         }
 
         // ensure that the current token is t and fetch the next token
@@ -237,16 +310,6 @@ class Compiler {
             }
         }
 
-        // match a semicolon
-        inline void semi() {
-            match(T_SEMI, ";");
-        }
-
-        // match an identifier
-        inline void ident() {
-            match(T_IDENT, "identifier");
-        }
-
         // return an AST tree whose root is a binary operator
         // Parameter ptp is the previous token's precedence
         shared_ptr<ASTNode> binexpr(int ptp) {
@@ -254,10 +317,9 @@ class Compiler {
             left = primary(); // build the left sub-tree
 
             int tokenType = token.getToken();
-            // base case, no tokens left
-            if (tokenType == T_SEMI) // statements terminated by a semicolon
+            if (tokenType == T_SEMI || tokenType == T_RPAREN) // statements terminated by a semicolon
                 return left;
-
+        
             // while the precedence of this token
             // is more than that of the previous token precedence
             while (opPrecedence(tokenType) > ptp) {
@@ -272,7 +334,7 @@ class Compiler {
                 left = left2;
 
                 tokenType = token.getToken();
-                if (tokenType == T_SEMI) // statements terminated by a semicolon
+                if (tokenType == T_SEMI || tokenType == T_RPAREN)
                     break;
             }
 
@@ -293,9 +355,9 @@ class Compiler {
                         // check that this identifier exists
                         string name(buf);
                         int id = findglob(name);
-                        if (id == -1) {
+                        if (id == -1)
                             error_exit("Unknown variable", name);
-                        }
+
                         shared_ptr<ASTNode> node(new ASTNode(A_IDENT, id));
                         scanChars();
                         return node;
@@ -309,7 +371,7 @@ class Compiler {
         int scanChars() {
             if (!skip()) { // read the next character, skip whitespace
                 token.setToken(T_EOF);
-                return 0; // EOF
+                return 0; //EOF
             }
 
             switch (c) { // determine token type
@@ -327,6 +389,18 @@ class Compiler {
                     break;
                 case ';':
                     token.setToken(T_SEMI);
+                    break;
+                case '{':
+                    token.setToken(T_LBRACE);
+                    break;
+                case '}':
+                    token.setToken(T_RBRACE);
+                    break;
+                case '(':
+                    token.setToken(T_LPAREN);
+                    break;
+                case ')':
+                    token.setToken(T_RPAREN);
                     break;
                 case '=':
                     next();
@@ -426,13 +500,19 @@ class Compiler {
         // token number or 0 if it's not a keyword
         int keyword() {
             switch(buf[0]) {
+                case 'e':
+                    if (!strcmp(buf, "else"))
+                        return T_ELSE;
+                    break;
+                case 'i':
+                    if (!strcmp(buf, "if"))
+                        return T_IF;
+                    if (!strcmp(buf, "int"))
+                        return T_INT;
+                    break;
                 case 'p':
                     if (!strcmp(buf, "print"))
                         return T_PRINT;
-                    break;
-                case 'i':
-                    if (!strcmp(buf, "int"))
-                        return T_INT;
                     break;
             }
             return 0;
@@ -474,7 +554,7 @@ class Compiler {
         int opPrecedence(int tokenType) {
             int prec = opPrec[tokenType];
             if (prec == 0) {
-                error_exit("Syntax error, token", tokenType);
+                error_exit("Syntax error, token", tokstr[tokenType]);
             }
             return prec;
         }
@@ -483,13 +563,30 @@ class Compiler {
         /* code generation */
 
         // given an AST, generate assembly code recursively
-        int genASM(shared_ptr<ASTNode> node, int reg) {
+        // the register (if any) holds the previous rvalue
+        // parentASTop holds the parent's operation
+        int genASM(shared_ptr<ASTNode> node, int reg, int parentASTop) {
             // int leftval = 0, rightval = 0;
             int leftreg, rightreg;
 
+            // specific AST node handling
+            switch (node->op) {
+                case A_IF:
+                    return genIfASM(node);
+                case A_GLUE:
+                    // do each child statement, & free the registers after each child
+                    genASM(node->left, NOREG, node->op);
+                    free_all_registers();
+                    genASM(node->right, NOREG, node->op);
+                    free_all_registers();
+                    return NOREG;
+            }
+
+            // general AST node handling
+
             // get the values of the left and right subtrees
-            if (node->left)  leftreg  = genASM(node->left, -1);
-            if (node->right) rightreg = genASM(node->right, leftreg);
+            if (node->left)  leftreg  = genASM(node->left, NOREG, node->op);
+            if (node->right) rightreg = genASM(node->right, leftreg, node->op);
 
             switch (node->op) {
                 case A_ADD:      return cg_add(leftreg, rightreg);
@@ -500,16 +597,62 @@ class Compiler {
                 case A_IDENT:    return cg_load_glob(Gsym[node->value]);
                 case A_LVIDENT:  return cg_store_glob(reg, Gsym[node->value]);
                 case A_ASSIGN:   return rightreg; // the work has already been done
-                case A_EQ:       return cg_equal(leftreg, rightreg);
-                case A_NEQ:      return cg_not_equal(leftreg, rightreg);
-                case A_LT:       return cg_less_than(leftreg, rightreg);
-                case A_GT:       return cg_greater_than(leftreg, rightreg);
-                case A_LE:       return cg_less_equal(leftreg, rightreg);
-                case A_GE:       return cg_greater_equal(leftreg, rightreg);
+                case A_EQ:
+                case A_NEQ:
+                case A_LT:
+                case A_GT:
+                case A_LE:
+                case A_GE:
+                    // if the parent AST node is an A_IF, generate a compare followed by a jump. Otherwise, compare registers and set 1 or 0 based on the comparison.
+                    if (parentASTop == A_IF)
+                        return cg_compare_and_jump(node->op, leftreg, rightreg, reg);
+                    else
+                        return cg_compare_and_set(node->op, leftreg, rightreg);
+                case A_PRINT:
+                    // print the left child's value
+                    cg_printint(leftreg);
+                    free_all_registers();
+                    return NOREG;
                 default:
                     printf("Unknown AST operator %d\n", node->op);
                     exit(1);
             }
+        }
+
+        int genIfASM(shared_ptr<ASTNode> node) {
+            int lFalse, lEnd;
+
+            // create two labels
+            // one for the false compound statement
+            // another for the end of the overall IF statement
+            // if there's no else clause, lFalse is the ending label.
+            lFalse = label_id++;
+            if (node->right)
+                lEnd = label_id++;
+
+            // generate the condition code followed by a zero jump to the false label.
+            genASM(node->left, lFalse, node->op);
+            free_all_registers();
+
+            // generate the true compound statement
+            genASM(node->mid, NOREG, node->op);
+            free_all_registers();
+
+            // if there is an optional ELSE clause
+            // generate the jump to skip to the end
+            if (node->right)
+                cg_jump(lEnd);
+
+            cg_label(lFalse);
+
+            // optional ELSE clause
+            if (node->right) {
+                genASM(node->right, NOREG, node->op);
+                free_all_registers();
+                cg_label(lEnd);
+            }
+
+            return NOREG;
         }
 
         // add a global symbol to the symbol table
@@ -653,22 +796,38 @@ class Compiler {
             outputFile << "\t.comm\t" << name << ",8,8\n";
         }
 
-        // compare two registers
-        int cg_compare(int r1, int r2, string how) {
+        // compare two registers and set if true
+        int cg_compare_and_set(int ASTop, int r1, int r2) {
+            // check the range of the AST operation
+            if (ASTop < A_EQ || ASTop > A_GE)
+                error_exit("Bad ASTop in cgcompare_and_set()", "");
             outputFile << "\tcmpq\t" << reglist[r2] << ", " << reglist[r1] << "\n";
-            outputFile << "\t" << how << "\t" << breglist[r2] << "\n";
-            outputFile << "\tandq\t$255," << reglist[r2] << "\n";
+            outputFile << "\t" << cmplist[ASTop - A_EQ] << "\t" << breglist[r2] << "\n";
+            outputFile << "\tmovzbq\t" << breglist[r2] << ", " << reglist[r2] << "\n";
             free_register(r1);
             return r2;
         }
 
-        int cg_equal(int r1, int r2) { return cg_compare(r1, r2, "sete");}
-        int cg_not_equal(int r1, int r2) { return cg_compare(r1, r2, "setne");}
-        int cg_less_than(int r1, int r2) { return cg_compare(r1, r2, "setl");}
-        int cg_greater_than(int r1, int r2) { return cg_compare(r1, r2, "setg");}
-        int cg_less_equal(int r1, int r2) { return cg_compare(r1, r2, "setle");
+        // compare two registers and jump if false
+        int cg_compare_and_jump(int ASTop, int r1, int r2, int label) {
+            // check the range of the AST operation
+            if (ASTop < A_EQ || ASTop > A_GE)
+                error_exit("Bad ASTop in cg_compare_and_jump()", "");
+            outputFile << "\tcmpq\t" << reglist[r2] << ", " << reglist[r1] << "\n";
+            outputFile << "\t" << invcmplist[ASTop - A_EQ] << "\tL" << label << "\n";
+            free_all_registers();
+            return NOREG;
         }
-        int cg_greater_equal(int r1, int r2) { return cg_compare(r1, r2, "setge");}
+
+        // generate a label
+        void cg_label(int l) {
+            outputFile << "L" << l << ":\n";
+        }
+
+        // generate a jump to a label
+        void cg_jump(int l) {
+            outputFile << "\tjmp\tL" << l << "\n";
+        }
 
 
         /* debugging */
@@ -729,8 +888,12 @@ class Compiler {
         string outputPath;
         int freereg[4] = {1, 1, 1, 1};
         int n_globs = 0; // number of globals
+        int label_id = 1; // label numbers
         const string reglist[4] = {"%r8", "%r9", "%r10", "%r11"};
         const string breglist[4] = { "%r8b", "%r9b", "%r10b", "%r11b" };
+        const string cmplist[6] = {"sete", "setne", "setl", "setg", "setle", "setge"};
+        // list of inverted jump instructions in AST order: A_EQ, A_NE, A_LT, A_GT, A_LE, A_GE
+        const string invcmplist[6] = {"jne", "je", "jge", "jle", "jg", "jl"};
         map<int, string> Gsym; // store global variables
 };
 
@@ -741,6 +904,7 @@ int main(int argc, char** argv) {
     }
 
     Compiler compiler(argv[1]) ;
+    // cout << compiler.label_id << endl;
     // compiler.print_symbol_table();
     // compiler.traverseAST();
     // compiler.generateAssembly();
