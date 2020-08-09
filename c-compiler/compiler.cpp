@@ -1,14 +1,17 @@
 #include <iostream>
 #include <fstream>
 #include <memory>
-#include <cstring>
 #include <map>
+#include <cstdlib>
+#include <cstring>
 #include <sys/wait.h>
+#include <signal.h>
 #include <unistd.h>
 
 #define IDENT_LIM 256 // limit on identifier length
 #define IDENT_BUFFER_LEN IDENT_LIM + 1
 #define NOREG -1
+#define NOSEGINT -1
 
 using namespace std;
 
@@ -19,7 +22,7 @@ string tokstr[] = {
     "==", "!=", "<", ">", "<=", ">=",
     "intlit", ";", "=", "identifier",
     "{", "}", "(", ")",
-    "print", "int", "if", "else"
+    "print", "int", "if", "else", "while"
 };
 
 // Tokens
@@ -31,7 +34,7 @@ enum {
   T_LT, T_GT, T_LE, T_GE, // <, >, <=, >=
   T_INTLIT, T_SEMI, T_ASSIGN, T_IDENT,
   T_LBRACE, T_RBRACE, T_LPAREN, T_RPAREN,
-  T_PRINT, T_INT, T_IF, T_ELSE // keywords
+  T_PRINT, T_INT, T_IF, T_ELSE, T_WHILE, T_FOR // keywords
 };
 
 // operator precedence for each token
@@ -72,7 +75,7 @@ enum {
   A_EQ, A_NEQ, A_LT, A_GT, A_LE, A_GE,
   A_INTLIT,
   A_IDENT, A_LVIDENT, A_ASSIGN,
-  A_PRINT, A_GLUE, A_IF
+  A_PRINT, A_GLUE, A_IF, A_WHILE
 };
 
 // Abstract Syntax Tree node
@@ -111,7 +114,7 @@ class ASTNode {
 
             if (left)
                 left->traverse();
-
+                
             if (right)
                 right->traverse();
         }
@@ -129,6 +132,24 @@ class ASTNode {
     friend class Compiler;
 };
 
+// handle segmentation faults
+void handler(int sig) {
+    // print the backtrace using gdb
+    char pid_buf[32];
+    sprintf(pid_buf, "%d", getpid());
+    char name_buf[512];
+    name_buf[readlink("/proc/self/exe", name_buf, 511)] = 0;
+    int child_pid = fork();
+    if (!child_pid) {
+        dup2(2, 1); // redirect output to stderr
+        fprintf(stdout, "\nStack trace for %s pid=%s\n", name_buf, pid_buf);
+        execlp("gdb", "gdb", "--batch", "-n", "-ex", "thread", "-ex", "bt", name_buf, pid_buf, NULL);
+        abort(); // if gdb failed to start
+    } else {
+        waitpid(child_pid, NULL, 0);
+    }
+    exit(0);
+}
 
 class Compiler {
     public:
@@ -175,42 +196,56 @@ class Compiler {
         /* scanning and parsing */
     
         shared_ptr<ASTNode> compound_statement() {
+            int *foo = NULL;
+            printf("%d\n", *foo);
+
             shared_ptr<ASTNode> left = NULL, tree;
 
             match(T_LBRACE, "{");
 
             while (1) {
-                switch (token.getToken()) {
-                    case T_PRINT:
-                        tree = print_statement();
-                        break;
-                    case T_INT:
-                        var_declaration();
-                        tree = NULL;
-                        break;
-                    case T_IDENT:
-                        tree = assignment_statement();
-                        break;
-                    case T_IF:
-                        tree = if_statement();
-                        break;
-                    case T_RBRACE:
-                        // when we hit a }, we skip past it and return the AST
+                    tree = single_statement();
+
+                    if (tree != NULL && (tree->op == A_PRINT || tree->op == A_ASSIGN))
+                        match(T_SEMI, ";");
+                    
+                    // for each new tree, either save it in left if it's empty, or glue the left and the new tree together
+                    if (tree) {
+                        if (left == NULL)
+                            left = tree;
+                        else {
+                            shared_ptr<ASTNode> left2(new ASTNode(A_GLUE, 0, left, NULL, tree));
+                            left = left2;
+                        }
+                    }
+                    
+                    // when we hit a }, we skip past it and return the AST
+                    if (token.getToken() == T_RBRACE) {
                         match(T_RBRACE, "}");
                         return left;
-                    default:
-                        error_exit("Syntax error, token", token.getToken());
-                }
-
-                // for each new tree, either save it in left if it's empty, or glue the left and the new tree together
-                if (tree) {
-                    if (left == NULL)
-                        left = tree;
-                    else {
-                        shared_ptr<ASTNode> left2(new ASTNode(A_GLUE, 0, left, NULL, tree));
-                        left = left2;
                     }
-                }
+            }
+        }
+
+        // single statement without scanning ending semicolon i.e. for for loop
+        shared_ptr<ASTNode> single_statement() {
+            switch(token.getToken()) {
+                case T_PRINT:
+                    return print_statement();
+                case T_INT:
+                    var_declaration();
+                    return NULL; // no AST generated
+                case T_IDENT:
+                    return assignment_statement();
+                case T_IF:
+                    return if_statement();
+                case T_WHILE:
+                    return while_statement();
+                case T_FOR:
+                    return for_statement();
+                default:
+                    error_exit("Syntax error, token", tokstr[token.getToken()]);
+                    exit(1); // unreachable
             }
         }
 
@@ -225,8 +260,6 @@ class Compiler {
             node = binexpr(0);
 
             shared_ptr<ASTNode> node2(new ASTNode(A_PRINT, 0, node));
-
-            match(T_SEMI, ";");
             return node2;
         }
 
@@ -264,9 +297,6 @@ class Compiler {
 
             // make an assignment AST tree
             shared_ptr<ASTNode> tree(new ASTNode(A_ASSIGN, 0, left, NULL, right));
-
-            // match the semicolon
-            match(T_SEMI, ";");
             return tree;
         }
 
@@ -300,6 +330,48 @@ class Compiler {
             return r;
         }
 
+        shared_ptr<ASTNode> while_statement() {
+            shared_ptr<ASTNode> condAST, bodyAST;
+
+            match(T_WHILE, "while");
+            match(T_LPAREN, "(");
+
+            condAST = binexpr(0);
+            if (condAST->op < A_EQ || condAST->op > A_GE)
+                error_exit("Bad comparison operator", "");
+            match(T_RPAREN, ")");
+
+            bodyAST = compound_statement();
+
+            shared_ptr<ASTNode> r(new ASTNode(A_WHILE, 0, condAST, NULL, bodyAST));
+            return r;
+        }
+
+        shared_ptr<ASTNode> for_statement() {
+            shared_ptr<ASTNode> condAST, bodyAST, preopAST, postopAST;
+
+            match(T_FOR, "for");
+            match(T_LPAREN, "(");
+
+            preopAST = single_statement();
+            match(T_SEMI, ";");
+
+            condAST = binexpr(0);
+            if (condAST->op < A_EQ || condAST->op > A_GE)
+                error_exit("Bad comparison operator", "");
+            match(T_SEMI, ";");
+
+            postopAST = single_statement();
+            match(T_RPAREN, ")");
+
+            bodyAST = compound_statement();
+
+            shared_ptr<ASTNode> tree1(new ASTNode(A_GLUE, 0, bodyAST, NULL, postopAST));
+            shared_ptr<ASTNode> tree2(new ASTNode(A_WHILE, 0, condAST, NULL, tree1));
+            shared_ptr<ASTNode> tree(new ASTNode(A_GLUE, 0, preopAST, NULL, tree2));
+            return tree;
+        }
+
         // ensure that the current token is t and fetch the next token
         // else throw an error
         void match(int t, string what) {
@@ -330,7 +402,7 @@ class Compiler {
                 right = binexpr(opPrec[tokenType]);
 
                 // join the right sub-tree above with the tree we already have
-                shared_ptr<ASTNode> left2(new ASTNode(arithOp(tokenType), 0, left, right));
+                shared_ptr<ASTNode> left2(new ASTNode(tokenToASTOp(tokenType), 0, left, right));
                 left = left2;
 
                 tokenType = token.getToken();
@@ -363,8 +435,8 @@ class Compiler {
                         return node;
                     }
                 default:
-                    printf("Syntax error on line %d:%d\n", n_line, line_pos);
-                    exit(1);
+                    error_exit("Syntax error", "");
+                    exit(1); // unreachable
             }
         }
 
@@ -504,6 +576,9 @@ class Compiler {
                     if (!strcmp(buf, "else"))
                         return T_ELSE;
                     break;
+                case 'f':
+                    if (!strcmp(buf, "for"))
+                        return T_FOR;
                 case 'i':
                     if (!strcmp(buf, "if"))
                         return T_IF;
@@ -513,6 +588,10 @@ class Compiler {
                 case 'p':
                     if (!strcmp(buf, "print"))
                         return T_PRINT;
+                    break;
+                case 'w':
+                    if (!strcmp(buf, "while"))
+                        return T_WHILE;
                     break;
             }
             return 0;
@@ -543,7 +622,7 @@ class Compiler {
 
         // convert a token into an AST operation
         // 1:1 mapping
-        int arithOp(int tokenType) {
+        int tokenToASTOp(int tokenType) {
             if (tokenType > T_EOF && tokenType < T_INTLIT)
                 return tokenType;
             error_exit("Unknown token", tokstr[tokenType]);
@@ -573,6 +652,8 @@ class Compiler {
             switch (node->op) {
                 case A_IF:
                     return genIfASM(node);
+                case A_WHILE:
+                    return genWhile(node);
                 case A_GLUE:
                     // do each child statement, & free the registers after each child
                     genASM(node->left, NOREG, node->op);
@@ -603,8 +684,8 @@ class Compiler {
                 case A_GT:
                 case A_LE:
                 case A_GE:
-                    // if the parent AST node is an A_IF, generate a compare followed by a jump. Otherwise, compare registers and set 1 or 0 based on the comparison.
-                    if (parentASTop == A_IF)
+                    // if the parent AST node is an A_IF or a A_WHILE, generate a compare followed by a jump. Otherwise, compare registers and set 1 or 0 based on the comparison.
+                    if (parentASTop == A_IF || parentASTop == A_WHILE)
                         return cg_compare_and_jump(node->op, leftreg, rightreg, reg);
                     else
                         return cg_compare_and_set(node->op, leftreg, rightreg);
@@ -614,7 +695,7 @@ class Compiler {
                     free_all_registers();
                     return NOREG;
                 default:
-                    printf("Unknown AST operator %d\n", node->op);
+                    error_exit("Unknown AST operator", node->op);
                     exit(1);
             }
         }
@@ -652,6 +733,25 @@ class Compiler {
                 cg_label(lEnd);
             }
 
+            return NOREG;
+        }
+
+        // generate the code for a while statement
+        int genWhile(shared_ptr<ASTNode> node) {
+            int lStart = label_id++, lEnd = label_id++;
+            cg_label(lStart);
+
+            // generate the condition code followed by a jump to the end label
+            genASM(node->left, lEnd, node->op);
+            free_all_registers();
+
+            // generate the command statement for the body
+            genASM(node->right, NOREG, node->op);
+            free_all_registers();
+
+            // finally output the jump back to the condition
+            cg_jump(lStart);
+            cg_label(lEnd);
             return NOREG;
         }
 
@@ -841,21 +941,6 @@ class Compiler {
         inline void error_exit(string err_msg, T extra) {
             cerr << err_msg << " " << extra << " on line " << n_line << ":" << line_pos << endl;
 
-            // print the backtrace using gdb
-            char pid_buf[32];
-            sprintf(pid_buf, "%d", getpid());
-            char name_buf[512];
-            name_buf[readlink("/proc/self/exe", name_buf, 511)] = 0;
-            int child_pid = fork();
-            if (!child_pid) {
-                dup2(2, 1); // redirect output to stderr
-                fprintf(stdout, "\nStack trace for %s pid=%s\n", name_buf, pid_buf);
-                execlp("gdb", "gdb", "--batch", "-n", "-ex", "thread", "-ex", "bt", name_buf, pid_buf, NULL);
-                abort(); // if gdb failed to start
-            } else {
-                waitpid(child_pid, NULL, 0);
-            }
-
             // delete created ASM output file
             int len = outputPath.length();
             char outputPath2[len + 1];
@@ -865,7 +950,8 @@ class Compiler {
 
             outputPath2[len] = '\0';
             remove(outputPath2);
-            exit(1);
+
+            handler(NOSEGINT);
         }
 
         void print_symbol_table() {
@@ -903,7 +989,10 @@ int main(int argc, char** argv) {
         exit(1);
     }
 
-    Compiler compiler(argv[1]) ;
+    // listen for segfaults
+    signal(SIGSEGV, handler);
+
+    Compiler compiler(argv[1]);
     // cout << compiler.label_id << endl;
     // compiler.print_symbol_table();
     // compiler.traverseAST();
