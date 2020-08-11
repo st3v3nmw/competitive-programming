@@ -15,13 +15,14 @@ printint:
 	leave
 	ret
 
+	.comm	foo,8,8
+	.comm	bar,8,8
+	.text
 	.globl	main
 	.type	main, @function
 main:
 	pushq	%rbp
 	movq	%rsp, %rbp
-	.comm	foo,8,8
-	.comm	bar,8,8
 	movq	$123, %r8
 	movq	%r8, foo(%rip)
 	movq	$2, %r8
@@ -46,6 +47,6 @@ main:
 	subq	%r10, %r9
 	movq	%r9, %rdi
 	call	printint
-	movl	$0, %eax
+	movl $0, %eax
 	popq	%rbp
 	ret

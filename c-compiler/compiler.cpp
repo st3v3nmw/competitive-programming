@@ -34,7 +34,7 @@ enum {
   T_LT, T_GT, T_LE, T_GE, // <, >, <=, >=
   T_INTLIT, T_SEMI, T_ASSIGN, T_IDENT,
   T_LBRACE, T_RBRACE, T_LPAREN, T_RPAREN,
-  T_PRINT, T_INT, T_IF, T_ELSE, T_WHILE, T_FOR // keywords
+  T_PRINT, T_INT, T_IF, T_ELSE, T_WHILE, T_FOR, T_VOID // keywords
 };
 
 // operator precedence for each token
@@ -75,7 +75,7 @@ enum {
   A_EQ, A_NEQ, A_LT, A_GT, A_LE, A_GE,
   A_INTLIT,
   A_IDENT, A_LVIDENT, A_ASSIGN,
-  A_PRINT, A_GLUE, A_IF, A_WHILE
+  A_PRINT, A_GLUE, A_IF, A_WHILE, A_FUNCTION
 };
 
 // Abstract Syntax Tree node
@@ -132,13 +132,14 @@ class ASTNode {
     friend class Compiler;
 };
 
-// handle segmentation faults
+// handle segmentation faults and other error exits
 void handler(int sig) {
     // print the backtrace using gdb
     char pid_buf[32];
     sprintf(pid_buf, "%d", getpid());
     char name_buf[512];
     name_buf[readlink("/proc/self/exe", name_buf, 511)] = 0;
+
     int child_pid = fork();
     if (!child_pid) {
         dup2(2, 1); // redirect output to stderr
@@ -148,7 +149,8 @@ void handler(int sig) {
     } else {
         waitpid(child_pid, NULL, 0);
     }
-    exit(0);
+
+    exit(1);
 }
 
 class Compiler {
@@ -183,22 +185,23 @@ class Compiler {
             // parse and generate assembly code
             token = Token();
             scanChars(); // get the 1st token
-            root = compound_statement(); // parse the statements
+            while (1) {
+                root = function_declaration(); // parse the statements
+                genASM(root, NOREG, 0);
+                if (token.getToken() == T_EOF)
+                    break;
+            }
+            
             cout << filename << " parsed successfully :)" << endl;
 
-            genASM(root, NOREG, 0);
-
             // output postamble
-            cg_postamble();
+            // cg_postamble();
         }
 
 
         /* scanning and parsing */
     
         shared_ptr<ASTNode> compound_statement() {
-            int *foo = NULL;
-            printf("%d\n", *foo);
-
             shared_ptr<ASTNode> left = NULL, tree;
 
             match(T_LBRACE, "{");
@@ -230,19 +233,14 @@ class Compiler {
         // single statement without scanning ending semicolon i.e. for for loop
         shared_ptr<ASTNode> single_statement() {
             switch(token.getToken()) {
-                case T_PRINT:
-                    return print_statement();
+                case T_PRINT:   return print_statement();
                 case T_INT:
                     var_declaration();
                     return NULL; // no AST generated
-                case T_IDENT:
-                    return assignment_statement();
-                case T_IF:
-                    return if_statement();
-                case T_WHILE:
-                    return while_statement();
-                case T_FOR:
-                    return for_statement();
+                case T_IDENT:   return assignment_statement();
+                case T_IF:      return if_statement();
+                case T_WHILE:   return while_statement();
+                case T_FOR:     return for_statement();
                 default:
                     error_exit("Syntax error, token", tokstr[token.getToken()]);
                     exit(1); // unreachable
@@ -268,8 +266,7 @@ class Compiler {
             // int then identifier then semicolon ;
             match(T_INT, "int");
             match(T_IDENT, "identifier");
-            string name(buf);
-            addglob(name);
+            addglob(string(buf));
             cg_globsym();
             match(T_SEMI, ";");
         }
@@ -370,6 +367,20 @@ class Compiler {
             shared_ptr<ASTNode> tree2(new ASTNode(A_WHILE, 0, condAST, NULL, tree1));
             shared_ptr<ASTNode> tree(new ASTNode(A_GLUE, 0, preopAST, NULL, tree2));
             return tree;
+        }
+
+        shared_ptr<ASTNode> function_declaration() {
+            shared_ptr<ASTNode> tree;
+
+            match(T_VOID, "void");
+            match(T_IDENT, "identifier");
+            int nameslot = addglob(string(buf));
+            match(T_LPAREN, "(");
+            match(T_RPAREN, ")");
+
+            tree = compound_statement();
+            shared_ptr<ASTNode> tree2(new ASTNode(A_FUNCTION, nameslot, tree));
+            return tree2;
         }
 
         // ensure that the current token is t and fetch the next token
@@ -554,9 +565,8 @@ class Compiler {
             while (isalnum(c) || '_' == c) {
                 // error if we reach the identifier length limit,
                 // else append to buf and get next char
-                if (ident_lim - 1 == i) {
+                if (ident_lim - 1 == i)
                     error_exit("Identifier too long on", "");
-                };
                 buf[i++] = c;
                 next();
             }
@@ -573,26 +583,18 @@ class Compiler {
         int keyword() {
             switch(buf[0]) {
                 case 'e':
-                    if (!strcmp(buf, "else"))
-                        return T_ELSE;
-                    break;
+                    if (!strcmp(buf, "else"))   return T_ELSE;
                 case 'f':
-                    if (!strcmp(buf, "for"))
-                        return T_FOR;
+                    if (!strcmp(buf, "for"))    return T_FOR;
                 case 'i':
-                    if (!strcmp(buf, "if"))
-                        return T_IF;
-                    if (!strcmp(buf, "int"))
-                        return T_INT;
-                    break;
+                    if (!strcmp(buf, "if"))     return T_IF;
+                    if (!strcmp(buf, "int"))    return T_INT;
                 case 'p':
-                    if (!strcmp(buf, "print"))
-                        return T_PRINT;
-                    break;
+                    if (!strcmp(buf, "print"))  return T_PRINT;
+                case 'v':
+                    if (!strcmp(buf, "void"))   return T_VOID;
                 case 'w':
-                    if (!strcmp(buf, "while"))
-                        return T_WHILE;
-                    break;
+                    if (!strcmp(buf, "while"))  return T_WHILE;
             }
             return 0;
         }
@@ -660,6 +662,11 @@ class Compiler {
                     free_all_registers();
                     genASM(node->right, NOREG, node->op);
                     free_all_registers();
+                    return NOREG;
+                case A_FUNCTION:
+                    cg_func_preamble(Gsym[node->value]);
+                    genASM(node->left, NOREG, node->op);
+                    cg_func_postamble();
                     return NOREG;
             }
 
@@ -759,10 +766,9 @@ class Compiler {
         inline int addglob(string name) {
             int y;
             // if symbol's already in symbol table
-            if ((y = findglob(name)) != -1) {
-                // return y;
+            if ((y = findglob(name)) != -1)
                 error_exit("Redeclaration of", name);
-            }
+
             // otherwise, get a new slot
             y = n_globs++;
             Gsym[y] = name;
@@ -792,9 +798,8 @@ class Compiler {
 
         // free a register
         void free_register(int reg) {
-            if (freereg[reg] != 0) {
+            if (freereg[reg] != 0)
                 error_exit("Error trying to free register", reg);
-            }
             freereg[reg] = 1;
         }
 
@@ -821,12 +826,7 @@ class Compiler {
                             "\tnop\n"
                             "\tleave\n"
                             "\tret\n"
-                            "\n"
-                            "\t.globl\tmain\n"
-                            "\t.type\tmain, @function\n"
-                            "main:\n"
-                            "\tpushq\t%rbp\n"
-                            "\tmovq	%rsp, %rbp\n";
+                            "\n";
         }
 
         // Print out the assembly postamble
@@ -892,8 +892,7 @@ class Compiler {
 
         // generate a global symbol
         void cg_globsym() {
-            string name(buf);
-            outputFile << "\t.comm\t" << name << ",8,8\n";
+            outputFile << "\t.comm\t" << string(buf) << ",8,8\n";
         }
 
         // compare two registers and set if true
@@ -927,6 +926,14 @@ class Compiler {
         // generate a jump to a label
         void cg_jump(int l) {
             outputFile << "\tjmp\tL" << l << "\n";
+        }
+
+        void cg_func_preamble(string name) {
+            outputFile << "\t.text\n\t.globl\t" << name << "\n\t.type\t" << name << ", @function\n" << name << ":\n\tpushq\t%rbp\n\tmovq\t%rsp, %rbp\n";
+        }
+
+        void cg_func_postamble() {
+            outputFile << "\tmovl $0, %eax\n\tpopq\t%rbp\n\tret\n";
         }
 
 
@@ -993,6 +1000,7 @@ int main(int argc, char** argv) {
     signal(SIGSEGV, handler);
 
     Compiler compiler(argv[1]);
+    // compiler.print_symbol_table();
     // cout << compiler.label_id << endl;
     // compiler.print_symbol_table();
     // compiler.traverseAST();

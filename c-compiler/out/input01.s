@@ -15,6 +15,7 @@ printint:
 	leave
 	ret
 
+	.text
 	.globl	main
 	.type	main, @function
 main:
@@ -50,6 +51,6 @@ main:
 	addq	%r8, %r10
 	movq	%r10, %rdi
 	call	printint
-	movl	$0, %eax
+	movl $0, %eax
 	popq	%rbp
 	ret
