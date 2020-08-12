@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from itertools import permutations
 
 col = Collection("/home/stephen/.local/share/Anki2/", user="Stephen Mwangi")
-data = col.notes.to_numpy()[:, 3] # API broken :(
+data = col.notes.to_numpy()[:, 3] # API broken :(, had to downgrade to Anki 2.1.26
 
 color_code, subjects, subjects_rank = {}, {}, {}
 with open("color-code.txt", "r") as f:
