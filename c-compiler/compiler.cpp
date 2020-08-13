@@ -34,7 +34,7 @@ enum {
   T_LT, T_GT, T_LE, T_GE, // <, >, <=, >=
   T_INTLIT, T_SEMI, T_ASSIGN, T_IDENT,
   T_LBRACE, T_RBRACE, T_LPAREN, T_RPAREN,
-  T_PRINT, T_INT, T_IF, T_ELSE, T_WHILE, T_FOR, T_VOID // keywords
+  T_PRINT, T_INT, T_IF, T_ELSE, T_WHILE, T_FOR, T_VOID, T_CHAR // keywords
 };
 
 // operator precedence for each token
@@ -48,25 +48,10 @@ static int opPrec[] = {
 class Token {
     public:
         Token() {}
-
-        void setToken(int token) {
-            Token::token = token;
-        }
-
-        void setValue(int value) {
-            Token::value = value;
-        }
-
-        int getToken() {
-            return token;
-        }
-
-        int getValue() {
-            return value;
-        }
     
     private:
         int token, value;
+    friend class Compiler;
 };
 
 // AST node types
@@ -75,7 +60,7 @@ enum {
   A_EQ, A_NEQ, A_LT, A_GT, A_LE, A_GE,
   A_INTLIT,
   A_IDENT, A_LVIDENT, A_ASSIGN,
-  A_PRINT, A_GLUE, A_IF, A_WHILE, A_FUNCTION
+  A_PRINT, A_GLUE, A_IF, A_WHILE, A_FUNCTION, A_WIDEN
 };
 
 // Abstract Syntax Tree node
@@ -100,9 +85,14 @@ class ASTNode {
             right = right_node;
         }
 
-        ASTNode(int op, int value, shared_ptr<ASTNode> left_node) { // unary
+        ASTNode(int op, int value, int type, shared_ptr<ASTNode> left_node) { // unary
             init(op, value);
             left = left_node;
+        }
+
+        ASTNode(int op, int value, int type) {
+            init(op, value);
+            ASTNode::type = type;
         }
 
         void traverse() {
@@ -122,6 +112,7 @@ class ASTNode {
     private:
         int op; // operation to be performed
         int value; // For A_INTLIT's integer value or for A_IDENT the symbol slot
+        int type; // type of any expression this tree generates
         shared_ptr<ASTNode> left, mid, right; // these f[a-z]*ing pointers :(
 
         inline void init(int op, int value) {
@@ -129,6 +120,36 @@ class ASTNode {
             ASTNode::value = value;
         }
 
+    friend class Compiler;
+};
+
+
+// Primitive types
+enum {
+    P_NONE, P_VOID, P_CHAR, P_INT
+};
+
+// structural types
+
+enum {
+    S_VARIABLE, S_FUNCTION
+};
+
+
+class SymTableStructure {
+    public:
+        SymTableStructure() {}
+
+        SymTableStructure(string name, int type, int stype) {
+            SymTableStructure::name = name;
+            SymTableStructure::type = type;
+            SymTableStructure::stype = stype;
+        }
+    
+    private:
+        string name;
+        int type; // primitive type for the symbol
+        int stype; // structural type for the symbol
     friend class Compiler;
 };
 
@@ -183,19 +204,15 @@ class Compiler {
             cg_preamble();
 
             // parse and generate assembly code
-            token = Token();
             scanChars(); // get the 1st token
             while (1) {
                 root = function_declaration(); // parse the statements
                 genASM(root, NOREG, 0);
-                if (token.getToken() == T_EOF)
+                if (t.token == T_EOF)
                     break;
             }
             
             cout << filename << " parsed successfully :)" << endl;
-
-            // output postamble
-            // cg_postamble();
         }
 
 
@@ -223,7 +240,7 @@ class Compiler {
                     }
                     
                     // when we hit a }, we skip past it and return the AST
-                    if (token.getToken() == T_RBRACE) {
+                    if (t.token == T_RBRACE) {
                         match(T_RBRACE, "}");
                         return left;
                     }
@@ -232,8 +249,9 @@ class Compiler {
 
         // single statement without scanning ending semicolon i.e. for for loop
         shared_ptr<ASTNode> single_statement() {
-            switch(token.getToken()) {
+            switch(t.token) {
                 case T_PRINT:   return print_statement();
+                case T_CHAR:
                 case T_INT:
                     var_declaration();
                     return NULL; // no AST generated
@@ -242,7 +260,7 @@ class Compiler {
                 case T_WHILE:   return while_statement();
                 case T_FOR:     return for_statement();
                 default:
-                    error_exit("Syntax error, token", tokstr[token.getToken()]);
+                    error_exit("Syntax error, token", tokstr[t.token]);
                     exit(1); // unreachable
             }
         }
@@ -257,31 +275,43 @@ class Compiler {
             // parse the expression & generate the assembly code
             node = binexpr(0);
 
-            shared_ptr<ASTNode> node2(new ASTNode(A_PRINT, 0, node));
+            int leftType = P_INT;
+            int rightType = node->type;
+            if (!type_compatible(&leftType, &rightType, 0))
+                error_exit("Incompatible types", "");
+            
+            // widen the tree if required
+            if (rightType) {
+                shared_ptr<ASTNode> n(new ASTNode(A_PRINT, 0, P_INT, node));
+                node = n;
+            }
+
+            shared_ptr<ASTNode> node2(new ASTNode(A_PRINT, 0, 0, node));
             return node2;
         }
 
         // handle a declaration statement
         void var_declaration() {
-            // int then identifier then semicolon ;
-            match(T_INT, "int");
+            // data type then identifier then semicolon
+            int type = parse_type(t.token);
+            scanChars();
             match(T_IDENT, "identifier");
-            addglob(string(buf));
-            cg_globsym();
+            int id = addglob(string(buf), type, S_VARIABLE);
+            cg_globsym(id);
             match(T_SEMI, ";");
         }
 
         // handle an assignment statement
         shared_ptr<ASTNode> assignment_statement() {
             shared_ptr<ASTNode> left;
-            int id;
 
             // ensure we have an identifier
             match(T_IDENT, "identifier");
 
             // check if it's been defined then make a leaf node for it
             string name(buf);
-            if ((id = findglob(name)) == -1)
+            int id = findglob(name);
+            if (id == -1)
                 error_exit("Undeclared variable", name);
 
             shared_ptr<ASTNode> right(new ASTNode(A_LVIDENT, id));
@@ -317,7 +347,7 @@ class Compiler {
 
             // If we have an 'else', skip it
             // and get the AST for the compound statement
-            if (token.getToken() == T_ELSE) {
+            if (t.token == T_ELSE) {
                 scanChars();
                 falseAST = compound_statement();
             }
@@ -374,19 +404,19 @@ class Compiler {
 
             match(T_VOID, "void");
             match(T_IDENT, "identifier");
-            int nameslot = addglob(string(buf));
+            int nameslot = addglob(string(buf), P_VOID, S_FUNCTION);
             match(T_LPAREN, "(");
             match(T_RPAREN, ")");
 
             tree = compound_statement();
-            shared_ptr<ASTNode> tree2(new ASTNode(A_FUNCTION, nameslot, tree));
+            shared_ptr<ASTNode> tree2(new ASTNode(A_FUNCTION, nameslot, 0, tree));
             return tree2;
         }
 
         // ensure that the current token is t and fetch the next token
         // else throw an error
-        void match(int t, string what) {
-            if (token.getToken() == t) {
+        void match(int t2, string what) {
+            if (t.token== t2) {
                 scanChars();
             } else {
                 error_exit(what, "expected on line");
@@ -399,7 +429,7 @@ class Compiler {
             shared_ptr<ASTNode> left, right;
             left = primary(); // build the left sub-tree
 
-            int tokenType = token.getToken();
+            int tokenType = t.token, leftType, rightType;
             if (tokenType == T_SEMI || tokenType == T_RPAREN) // statements terminated by a semicolon
                 return left;
         
@@ -412,11 +442,27 @@ class Compiler {
                 // of our token to build a sub-tree
                 right = binexpr(opPrec[tokenType]);
 
+                // Ensure the two types are compatible
+                leftType = left->type;
+                rightType = right->type;
+                if (!type_compatible(&leftType, &rightType, 0))
+                    error_exit("Incompatible types", "");
+
+                // widen either side if required. type vars are A_WIDEN now
+                if (leftType) {
+                    shared_ptr<ASTNode> left2(new ASTNode(leftType, 0, right->type, left));
+                    left = left2;
+                }
+                if (rightType) {
+                    shared_ptr<ASTNode> right2(new ASTNode(rightType, 0, left->type, right));
+                    right = right2;
+                }
+
                 // join the right sub-tree above with the tree we already have
                 shared_ptr<ASTNode> left2(new ASTNode(tokenToASTOp(tokenType), 0, left, right));
                 left = left2;
 
-                tokenType = token.getToken();
+                tokenType = t.token;
                 if (tokenType == T_SEMI || tokenType == T_RPAREN)
                     break;
             }
@@ -426,10 +472,18 @@ class Compiler {
 
         // return a node with a number (T_INTLIT)
         shared_ptr<ASTNode> primary() {
-            switch (token.getToken()) {
+            switch (t.token) {
                 case T_INTLIT:
                     {
-                        shared_ptr<ASTNode> node(new ASTNode(A_INTLIT, token.getValue()));
+                        shared_ptr<ASTNode> node;
+                        if (t.value >= 0 && t.token < 256) {
+                            shared_ptr<ASTNode> node2(new ASTNode(A_INTLIT, t.value, P_CHAR));
+                            node = node2;
+                        }
+                        else {
+                            shared_ptr<ASTNode> node2(new ASTNode(A_INTLIT, t.value, P_INT));
+                            node = node2;
+                        }
                         scanChars();
                         return node; 
                     }
@@ -441,7 +495,7 @@ class Compiler {
                         if (id == -1)
                             error_exit("Unknown variable", name);
 
-                        shared_ptr<ASTNode> node(new ASTNode(A_IDENT, id));
+                        shared_ptr<ASTNode> node(new ASTNode(A_IDENT, id, Gsym[id].type));
                         scanChars();
                         return node;
                     }
@@ -453,76 +507,76 @@ class Compiler {
 
         int scanChars() {
             if (!skip()) { // read the next character, skip whitespace
-                token.setToken(T_EOF);
+                t.token = T_EOF;
                 return 0; //EOF
             }
 
             switch (c) { // determine token type
                 case '+':
-                    token.setToken(T_PLUS);
+                    t.token = T_PLUS;
                     break;
                 case '-':
-                    token.setToken(T_MINUS);
+                    t.token = T_MINUS;
                     break;
                 case '*':
-                    token.setToken(T_STAR);
+                    t.token = T_STAR;
                     break;
                 case '/':
-                    token.setToken(T_SLASH);
+                    t.token = T_SLASH;
                     break;
                 case ';':
-                    token.setToken(T_SEMI);
+                    t.token = T_SEMI;
                     break;
                 case '{':
-                    token.setToken(T_LBRACE);
+                    t.token = T_LBRACE;
                     break;
                 case '}':
-                    token.setToken(T_RBRACE);
+                    t.token = T_RBRACE;
                     break;
                 case '(':
-                    token.setToken(T_LPAREN);
+                    t.token = T_LPAREN;
                     break;
                 case ')':
-                    token.setToken(T_RPAREN);
+                    t.token = T_RPAREN;
                     break;
                 case '=':
                     next();
                     if (c == '=') // ==
-                        token.setToken(T_EQ);
+                        t.token = T_EQ;
                     else {
                         inputFile.putback(c);
-                        token.setToken(T_ASSIGN);
+                        t.token = T_ASSIGN;
                     }
                     break;
                 case '!':
                     next();
                     if (c == '=')
-                        token.setToken(T_NEQ);
+                        t.token = T_NEQ;
                     else
                         error_exit("Unrecognized character", c);
                     break;
                 case '<':
                     next();
                     if (c == '=')
-                        token.setToken(T_LE);
+                        t.token = T_LE;
                     else {
                         inputFile.putback(c);
-                        token.setToken(T_LT);
+                        t.token = T_LT;
                     }
                     break;
                 case '>':
                     next();
                     if (c == '=')
-                        token.setToken(T_GE);
+                        t.token = T_GE;
                     else {
                         inputFile.putback(c);
-                        token.setToken(T_GT);
+                        t.token = T_GT;
                     }
                     break;
                 default:
                     if (isdigit(c)) {
-                        token.setValue(scanint()); // if it's a digit, scan the literal integer value
-                        token.setToken(T_INTLIT);
+                        t.value = scanint(); // if it's a digit, scan the literal integer value
+                        t.token = T_INTLIT;
                         break;
                     } else if (isalpha(c) || '_' == c) {
                         // scan keyword or identifier
@@ -531,12 +585,12 @@ class Compiler {
                         // if it's a recognized keyword, return token
                         int tokenType = keyword();
                         if (tokenType) {
-                            token.setToken(tokenType);
+                            t.token = tokenType;
                             break;
                         }
 
                         // not a recognized keyword, so it must be an identifier
-                        token.setToken(T_IDENT);
+                        t.token = T_IDENT;
                         break;
                     }
 
@@ -582,6 +636,8 @@ class Compiler {
         // token number or 0 if it's not a keyword
         int keyword() {
             switch(buf[0]) {
+                case 'c':
+                    if (!strcmp(buf, "char"))   return T_CHAR;
                 case 'e':
                     if (!strcmp(buf, "else"))   return T_ELSE;
                 case 'f':
@@ -597,6 +653,47 @@ class Compiler {
                     if (!strcmp(buf, "while"))  return T_WHILE;
             }
             return 0;
+        }
+
+        // parse the current token and return a primitive type enum value
+        int parse_type(int t2) {
+            if (t2 == T_CHAR)   return P_CHAR;
+            if (t2 == T_INT)    return P_INT;
+            if (t2 == T_VOID)   return P_VOID;
+            error_exit("Illegal type, token", t2);
+            return -1; // unreachable code
+        }
+
+        // given two primitive types, return true if they're compatible
+        // false otherwise. Also return either zero or an A_WIDEN
+        // operation if one has to be widened to match the other.
+        // If onlyright is true, only widen left to right.
+        int type_compatible(int *left, int *right, int onlyright) {
+            // voids not compatible with anything
+            if (*left == P_VOID || *right == P_VOID)  return 0;
+
+            // same types compatible
+            if (*left == *right) {
+                *left = *right = 0;
+                return 1;
+            }
+
+            // widen P_CHARS to P_INTs as required
+            if (*left == P_CHAR && *right == P_INT) {
+                *left = A_WIDEN;
+                *right = 0;
+                return 1;
+            }
+            if (*left == P_INT && *right == P_CHAR) {
+                if (onlyright) return 0;
+                *left = 0;
+                *right = A_WIDEN;
+                return 1;
+            }
+
+            // anything remaining is compatible, for now
+            *left = *right = 0;
+            return 1;
         }
 
         // get the next character
@@ -664,7 +761,7 @@ class Compiler {
                     free_all_registers();
                     return NOREG;
                 case A_FUNCTION:
-                    cg_func_preamble(Gsym[node->value]);
+                    cg_func_preamble(Gsym[node->value].name);
                     genASM(node->left, NOREG, node->op);
                     cg_func_postamble();
                     return NOREG;
@@ -682,9 +779,10 @@ class Compiler {
                 case A_MULTIPLY: return cg_mul(leftreg, rightreg);
                 case A_DIVIDE:   return cg_div(leftreg, rightreg);
                 case A_INTLIT:   return cg_load(node->value);
-                case A_IDENT:    return cg_load_glob(Gsym[node->value]);
-                case A_LVIDENT:  return cg_store_glob(reg, Gsym[node->value]);
+                case A_IDENT:    return cg_load_glob(node->value);
+                case A_LVIDENT:  return cg_store_glob(reg, node->value);
                 case A_ASSIGN:   return rightreg; // the work has already been done
+                case A_WIDEN:    return cg_widen(leftreg, node->left->type, node->type);
                 case A_EQ:
                 case A_NEQ:
                 case A_LT:
@@ -763,22 +861,22 @@ class Compiler {
         }
 
         // add a global symbol to the symbol table
-        inline int addglob(string name) {
-            int y;
+        inline int addglob(string name, int type, int stype) {
             // if symbol's already in symbol table
-            if ((y = findglob(name)) != -1)
+            int y = findglob(name);
+            if (y != -1)
                 error_exit("Redeclaration of", name);
 
             // otherwise, get a new slot
             y = n_globs++;
-            Gsym[y] = name;
+            Gsym[y] = SymTableStructure(name, type, stype);
             return y;
         }
 
         // find if a glob exists
         inline int findglob(string name) {
             for (auto it = Gsym.begin(); it != Gsym.end(); ++it) {
-                if (it->second == name)
+                if (it->second.name == name)
                     return it->first;
             }
             return -1;
@@ -871,15 +969,22 @@ class Compiler {
         }
 
         // load a value from a variable into a register
-        int cg_load_glob(string identifier) {
+        int cg_load_glob(int id) {
             int r = alloc_register();
-            outputFile << "\tmovq\t" << identifier << "(\%rip), " << reglist[r] << "\n";
+
+            if (Gsym[id].type == P_INT)
+                outputFile << "\tmovq\t" << Gsym[id].name << "(\%rip), " << reglist[r] << "\n";
+            else
+                outputFile << "\tmovzbq\t" << Gsym[id].name << "(\%rip), " << reglist[r] << "\n";
             return r;
         }
 
         // store a register's value into a register
-        int cg_store_glob(int r, string identifier) {
-            outputFile << "\tmovq\t" << reglist[r] << ", " << identifier << "(\%rip)\n";
+        int cg_store_glob(int r, int id) {
+            if (Gsym[id].type == P_INT)
+                outputFile << "\tmovq\t" << reglist[r] << ", " << Gsym[id].name << "(\%rip)\n";
+            else
+                outputFile << "\tmovb\t" << breglist[r] << ", " << Gsym[id].name << "(\%rip)\n";
             return r;
         }
 
@@ -891,8 +996,12 @@ class Compiler {
         }
 
         // generate a global symbol
-        void cg_globsym() {
-            outputFile << "\t.comm\t" << string(buf) << ",8,8\n";
+        void cg_globsym(int id) {
+            // choose P_INT or P_CHAR
+            if (Gsym[id].type == P_INT)
+                outputFile << "\t.comm\t" << Gsym[id].name << ",8,8\n";
+            else
+                outputFile << "\t.comm\t" << Gsym[id].name << ",1,1\n";
         }
 
         // compare two registers and set if true
@@ -936,6 +1045,10 @@ class Compiler {
             outputFile << "\tmovl $0, %eax\n\tpopq\t%rbp\n\tret\n";
         }
 
+        int cg_widen(int r, int oldType, int newType) {
+            return r; // nothing to do
+        }
+
 
         /* debugging */
 
@@ -963,7 +1076,7 @@ class Compiler {
 
         void print_symbol_table() {
             for (auto it = Gsym.begin(); it != Gsym.end(); ++it)
-                cout << it->first << " " << it->second << "\n";
+                cout << it->first << " " << it->second.name << "\n";
         }
     
     private:
@@ -973,7 +1086,7 @@ class Compiler {
         ifstream inputFile;
         string inputPath, filename;
         shared_ptr<ASTNode> root;
-        Token token;
+        Token t = Token();
         char buf[IDENT_BUFFER_LEN];
 
         // code generation stuff
@@ -987,7 +1100,7 @@ class Compiler {
         const string cmplist[6] = {"sete", "setne", "setl", "setg", "setle", "setge"};
         // list of inverted jump instructions in AST order: A_EQ, A_NE, A_LT, A_GT, A_LE, A_GE
         const string invcmplist[6] = {"jne", "je", "jge", "jle", "jg", "jl"};
-        map<int, string> Gsym; // store global variables
+        map<int, SymTableStructure> Gsym; // store global variables
 };
 
 int main(int argc, char** argv) {

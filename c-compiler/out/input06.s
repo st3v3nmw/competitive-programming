@@ -23,7 +23,7 @@ main:
 	pushq	%rbp
 	movq	%rsp, %rbp
 	movq	$0, %r8
-	movq	%r8, main(%rip)
+	movq	%r8, i(%rip)
 L1:
 	movq	i(%rip), %r8
 	movq	$8, %r9
@@ -35,7 +35,7 @@ L1:
 	movq	i(%rip), %r8
 	movq	$1, %r9
 	addq	%r8, %r9
-	movq	%r9, main(%rip)
+	movq	%r9, i(%rip)
 	jmp	L1
 L2:
 	movl $0, %eax

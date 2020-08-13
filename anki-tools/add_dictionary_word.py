@@ -2,6 +2,7 @@ from wiktionaryparser import WiktionaryParser
 import json
 import urllib.request
 
+# Using Anki Connect addon
 def request(action, **params):
     return {'action': action, 'params': params, 'version': 6}
 
@@ -33,7 +34,7 @@ for w in ws:
 
     ipa = ""
     priority = 0 # higher is better
-    print(word[0]['pronunciations']['text'])
+    # print(word[0]['pronunciations']['text'])
     for pr in word[0]['pronunciations']['text']:
         if pr[:3] == 'IPA': # priority 4
             if priority < 4:
@@ -53,11 +54,10 @@ for w in ws:
         elif pr[:23] == '(British, America) IPA': # priority 3
             if priority < 4:
                 ipa = pr[25:]
-                print("sagdfsdf")
         elif pr[:12] == '(UK, US) IPA': # priority 3
             if priority < 3:
                 ipa = pr[14:]
-        elif pr[:9] == '(US): IPA':
+        elif pr[:9] == '(US): IPA': # priority 3
             if priority < 3:
                 ipa = pr[11:]
     try:
@@ -65,7 +65,7 @@ for w in ws:
     except IndexError:
         examples = ''
 
-    note = {"note": {"deckName": "~Miscellaneous", "modelName": "Lexicon", "fields": {"Word": w, "Part of Speech" : definition['partOfSpeech'], "IPA": ipa, "Definition": definition['text'][1], "Examples": examples}, "options": {"allowDuplicate": False, "duplicateScope": "deck"}}}
+    note = {"note": {"deckName": "~Miscellaneous", "modelName": "Vocabulary", "fields": {"Word": w, "Part of Speech" : definition['partOfSpeech'], "IPA": ipa, "Definition": definition['text'][1], "Examples": examples}, "options": {"allowDuplicate": False, "duplicateScope": "deck"}}}
 
     try:
         result = invoke('addNote', **note)
