@@ -7,6 +7,7 @@ col = Collection("/home/stephen/.local/share/Anki2/", user="Stephen Mwangi")
 data = col.notes.to_numpy()[:, 3] # API broken :(, had to downgrade to Anki 2.1.26
 
 color_code, subjects, subjects_rank = {}, {}, {}
+subjects_count = {}
 with open("color-code.txt", "r") as f:
     lines = f.readlines()
     color_code['default'] = lines[0].split(',')[1].strip()
@@ -48,12 +49,16 @@ i, llen, backslash = 0, len(sorted_pr), '\n'
 f = open("page-rank.txt", "w")
 for i in range(llen):
     try:
-        subjects_rank[subjects[sorted_pr[i][0]]] += round(sorted_pr[i][1] * 1000, 4)
+        subjects_rank[subjects[sorted_pr[i][0]]] += sorted_pr[i][1] * 1000
+        subjects_count[subjects[sorted_pr[i][0]]] += 1
     except KeyError:
-        subjects_rank[subjects[sorted_pr[i][0]]] = round(sorted_pr[i][1] * 1000, 4)
+        subjects_rank[subjects[sorted_pr[i][0]]] = sorted_pr[i][1] * 1000
+        subjects_count[subjects[sorted_pr[i][0]]] = 1
     f.write(f"{i + 1} {sorted_pr[i][0]} {round(sorted_pr[i][1] * 1000, 4)}{backslash if i != llen - 1 else ''}")
     i += 1
-f.write("\n\n" + str(sorted(subjects_rank.items(), key=lambda kv: kv[1], reverse=True)))
+for subject in subjects_rank:
+    subjects_rank[subject] = round(subjects_rank[subject] / subjects_count[subject], 4)
+f.write("\n\nAverages: " + str(sorted(subjects_rank.items(), key=lambda kv: kv[1], reverse=True)))
 f.close()
 
 fig = plt.gcf()

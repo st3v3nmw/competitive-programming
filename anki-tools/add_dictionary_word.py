@@ -70,5 +70,5 @@ for w in ws:
     try:
         result = invoke('addNote', **note)
         print(f"{w} added")
-    except Exception:
-        print(f"{w} already exists, duplicate")
+    except Exception as e:
+        print(e)
