@@ -21,9 +21,23 @@ def invoke(action, **params):
 
 parser = WiktionaryParser()
 ws = input("Enter comma separated words: ").split(',')
+# parser.set_default_language('German')
 
 for w in ws:
     word = parser.fetch(w)
+    audio_file = 'a'
+    audio = []
+
+    try:
+        audio.append({
+                        "url": "https:" + word[0]['pronunciations']['audio'][0],
+                        "filename": w + "-en.mp3", # en English suffix
+                        "fields": [
+                            "Audio"
+                        ]
+                    })
+    except IndexError:
+        pass
 
     try:
         definition = word[0]['definitions'][0]
@@ -65,7 +79,28 @@ for w in ws:
     except IndexError:
         examples = ''
 
-    note = {"note": {"deckName": "~Miscellaneous", "modelName": "Vocabulary", "fields": {"Word": w, "Part of Speech" : definition['partOfSpeech'], "IPA": ipa, "Definition": definition['text'][1], "Examples": examples}, "options": {"allowDuplicate": False, "duplicateScope": "deck"}}}
+    note = {
+            "note":
+                {
+                    "deckName": "Languages::English 🇰🇪🇺🇸🇬🇧🇿🇦",
+                    "modelName": "Vocabulary",
+                    "fields": {
+                        "Word": w,
+                        "Part of Speech": definition['partOfSpeech'],
+                        "IPA": ipa,
+                        "Definition": definition['text'][1],
+                        "Examples": examples
+                        },
+                    "options": {
+                        "allowDuplicate": False,
+                        "duplicateScope": "collection"
+                        },
+                    "audio": []
+                }
+            }
+    
+    if len(audio) != 0:
+        note["note"]["audio"] = audio
 
     try:
         result = invoke('addNote', **note)

@@ -63,6 +63,7 @@ f.close()
 
 fig = plt.gcf()
 fig.set_size_inches(13.66, 6.43)
+nx.nx_pydot.graphviz_layout(G)
 nx.draw(G, pos = nx.nx_pydot.graphviz_layout(G), node_size = node_sizes, with_labels = True, font_size = 7, node_color = node_colors, edge_color = "gray")
 fig.savefig("knowledge-graph.png", dpi=100)
 plt.show()

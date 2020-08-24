@@ -13,13 +13,25 @@ using namespace std;
 #define FOR(i, n) for (int i = 0; i < n; i++)
 #define GCD(a,b) __gcd(a, b);
 #define LCM(a,b) (a) * ((b) / __gcd(a, b));
-// add powmod
 
 typedef long long ll;
 typedef vector<int> vi;
 typedef pair<int, int> pii;
 
 const ll MOD = 1e9 + 7;
+
+template <typename T>
+T modpow(T base, T exp, T modulus) {
+    base %= modulus;
+    T result = 1;
+    while (exp > 0) {
+        if (exp & 1)
+            result = (result * base) % modulus;
+            base = (base * base) % modulus;
+            exp >>= 1;
+    }
+    return result;
+}
 
 // debugging i.e debug(_(c) << _(b));
 

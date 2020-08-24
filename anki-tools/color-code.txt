@@ -1,6 +1,7 @@
 default,#ba68c8
-cs,#64b5f6,algorithms,artificial-intelligence,networking,operating-systems,compiler-theory,software-engineering,theory-of-computation,computer-architecture,distributed-systems,databases,computer-graphics
+computer science,#64b5f6,algorithms,artificial-intelligence,networking,operating-systems,compiler-theory,software-engineering,theory-of-computation,computer-architecture,distributed-systems,databases
 programming,#f06292,python,c/c++,javascript-html-css,java,haskell,assembly,rust
-math,#ffeb3b,probability-theory,logic,game-theory,calculus,combinatorics,geometry,information-theory,topology,number-theory,algebra
-physics,#76ff03,electronics,optics-waves,classical-mechanics,thermodynamics,quantum-mechanics,cosmology,relativity
-misc,#ba68c8,psychology,philosophy,investing,biology
+mathematics,#ffeb3b,probability-theory,logic,game-theory,calculus,combinatorics,geometry,information-theory,topology,number-theory,algebra
+physics,#76ff03,electromagnetism,optics,classical-mechanics,thermodynamics,quantum-mechanics,cosmology,relativity
+miscellaneous,#ba68c8,psychology,philosophy,biology,geography,history,chemistry
+finance,#ba68c8,finance
