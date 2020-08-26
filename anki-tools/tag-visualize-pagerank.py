@@ -1,10 +1,21 @@
 from ankipandas import Collection
 import networkx as nx
 import matplotlib.pyplot as plt
-from itertools import permutations
 
 col = Collection("/home/stephen/.local/share/Anki2/", user="Stephen Mwangi")
-data = col.notes.to_numpy()[:, 3] # API broken :(, had to downgrade to Anki 2.1.26
+
+decks = {}
+for card in col.cards.to_numpy():
+    if card[0] in decks:
+        continue
+    try:
+        if card[13] == "Languages::English 🇰🇪🇺🇸🇬🇧🇿🇦" or card[13] == "Languages::Deutsch 🇨🇭🇩🇪" or card[13] == "Languages::Français 🇫🇷":
+            continue
+        else:
+            idx = card[13].rindex("::") + 2
+            decks[card[0]] = '-'.join(card[13][idx:].split(" ")).lower()
+    except ValueError:
+        decks[card[0]] = card[13].lower()
 
 color_code, subjects, subjects_rank = {}, {}, {}
 subjects_count = {}
@@ -17,10 +28,19 @@ with open("color-code.txt", "r") as f:
             color_code[tag.strip()] = d[1]
             subjects[tag.strip()] = d[0]
 
-G = nx.Graph()
+G = nx.DiGraph()
 tags, node_sizes, node_colors, size_incr = [], [], [], 3
 
-for ntags in data:
+noteids = col.notes.id
+tags_data = col.notes["ntags"]
+
+for noteid in noteids:
+    if len(tags_data[noteid]) == 0:
+        continue
+    deck = decks[noteid]
+
+    ntags = tags_data[noteid]
+
     if 'leech' in ntags:
         ntags.pop(ntags.index('leech'))
     for tag in ntags:
@@ -35,12 +55,13 @@ for ntags in data:
             node_sizes.append(0)
         node_sizes[tags.index(tag)] += size_incr
 
-    p = list(permutations(ntags, 2))
-    for pair in p:
+    for tag in ntags:
+        if tag == deck:
+            continue
         try:
-            G[pair[0]][pair[1]]['weight'] += 1
+            G[tag][deck]['weight'] += 1
         except KeyError:
-            G.add_edge(pair[0], pair[1], weight = 1)
+            G.add_edge(tag, deck, weight = 1)
 
 pr = nx.algorithms.link_analysis.pagerank_alg.pagerank(G)
 sorted_pr = sorted(pr.items(), key=lambda kv: kv[1], reverse=True)
@@ -55,7 +76,6 @@ for i in range(llen):
         subjects_rank[subjects[sorted_pr[i][0]]] = sorted_pr[i][1] * 1000
         subjects_count[subjects[sorted_pr[i][0]]] = 1
     f.write(f"{i + 1} {sorted_pr[i][0]} {round(sorted_pr[i][1] * 1000, 4)}{backslash if i != llen - 1 else ''}")
-    i += 1
 for subject in subjects_rank:
     subjects_rank[subject] = round(subjects_rank[subject] / subjects_count[subject], 4)
 f.write("\n\nAverages: " + str(sorted(subjects_rank.items(), key=lambda kv: kv[1], reverse=True)))
