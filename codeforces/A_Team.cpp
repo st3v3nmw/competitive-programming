@@ -17,4 +17,12 @@ const ll MOD = 1e9 + 7;
 int main() {
     ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
     
+    int t, f1, f2, f3, solved = 0;
+    cin >> t;
+    for (int i = 0; i < t; i++) {
+        cin >> f1 >> f2 >> f3;
+        if (f1 + f2 + f3 > 1)
+            solved++;
+    }
+    cout << solved << eol;
 }
