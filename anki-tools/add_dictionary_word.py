@@ -82,7 +82,7 @@ for w in ws:
     note = {
             "note":
                 {
-                    "deckName": "Languages::English 🇰🇪🇺🇸🇬🇧🇿🇦",
+                    "deckName": "Miscellaneous::English",
                     "modelName": "Vocabulary",
                     "fields": {
                         "Word": w,
@@ -106,4 +106,4 @@ for w in ws:
         result = invoke('addNote', **note)
         print(f"{w} added")
     except Exception as e:
-        print(e)
+        print(f"{w} {e}")

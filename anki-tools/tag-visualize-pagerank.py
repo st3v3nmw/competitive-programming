@@ -9,7 +9,7 @@ for card in col.cards.to_numpy():
     if card[0] in decks:
         continue
     try:
-        if card[13] == "Languages::English 🇰🇪🇺🇸🇬🇧🇿🇦" or card[13] == "Languages::Deutsch 🇨🇭🇩🇪" or card[13] == "Languages::Français 🇫🇷":
+        if card[13] == "Miscellaneous::English":
             continue
         else:
             idx = card[13].rindex("::") + 2
@@ -33,6 +33,7 @@ tags, node_sizes, node_colors, size_incr = [], [], [], 3
 
 noteids = col.notes.id
 tags_data = col.notes["ntags"]
+col.db.close()
 
 for noteid in noteids:
     if len(tags_data[noteid]) == 0:
@@ -84,6 +85,6 @@ f.close()
 fig = plt.gcf()
 fig.set_size_inches(13.66, 6.43)
 nx.nx_pydot.graphviz_layout(G)
-nx.draw(G, pos = nx.nx_pydot.graphviz_layout(G), node_size = node_sizes, with_labels = True, font_size = 7, node_color = node_colors, edge_color = "gray")
+nx.draw(G, pos = nx.nx_pydot.graphviz_layout(G), node_size = node_sizes, with_labels = True, font_size = 7, node_color = node_colors, edge_color = "#cccccc")
 fig.savefig("knowledge-graph.png", dpi=100)
 plt.show()
