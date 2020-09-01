@@ -17,4 +17,24 @@ const ll MOD = 1e9 + 7;
 int main() {
     ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
     
+    int t, x;
+    cin >> t;
+    for (int i = 0; i < t; i++) {
+        vector<int> bb;
+
+        cin >> x;
+        bb.push_back(x);
+        cin >> x;
+        bb.push_back(x);
+        cin >> x;
+        bb.push_back(x);
+
+        sort(bb.begin(), bb.end());
+        if (bb[1] != bb[2])
+            cout << "NO" << eol;
+        else {
+            cout << "YES" << eol;
+            cout << bb[0] << " " << bb[0] << " " << bb[2] << eol;
+        }
+    }
 }
