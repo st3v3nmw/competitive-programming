@@ -17,8 +17,6 @@ const ll MOD = 1e9 + 7;
 int main() {
     ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
 
-    // TODO: Fix this
-
 	unsigned long n, col, row;
     cin >> n;
     string coord;
@@ -34,29 +32,25 @@ int main() {
                     break;
                 }
             }
-            bool d = false;
-            do {
-                if (col % 26 == 0) {
-                    if (d)
-                        result.push_back('Y');
-                    else
-                        result.push_back('Z');
-                    d = true;
-                } else if (d) {
-                    d = false;
-                    if (col % 26 != 1)
-                        result.push_back(char(col % 26 + 63));
-                } else
-                    result.push_back(char(col % 26 + 64));
+
+            char letter;
+            while (col > 0) {
+                long unsigned int m = col % 26;
+                if (m > 0)
+                    letter = 'A' + m - 1;
+                else {
+                    col -= 26;
+                    letter = 'Z';
+                }
                 col /= 26;
-            } while (col != 0);
+                result.push_back(letter);
+            }
 
             int s = result.size() - 1;
             for (int i = 0; i <= s; i++)
                 cout << result[s - i];
             cout << row << eol;
         } else {
-        	// debug(_(coord));
             col = int(coord[0]) - 64;
             for (long unsigned int i = 1; i < coord.length(); i++) {
                 if (isalpha(coord[i])) {
@@ -67,7 +61,6 @@ int main() {
                 }
             }
             cout << "R" << row << "C" << col << eol;
-            // debug(_(row) << _(col));
         }
     }
     return 0;

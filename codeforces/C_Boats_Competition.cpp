@@ -16,21 +16,53 @@ const ll MOD = 1e9 + 7;
 
 int main() {
     ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
+
+    // TODO: fix this
     
-    ll t, n, inp;
+    int t, n, w;
     cin >> t;
-    for (ll i = 0; i < t; i++) {
+
+    for (int i = 0; i < t; i++) {
         cin >> n;
-        vector<ll> bb;
-        for (ll j = 0; j < n; j++) {
-            cin >> inp;
-            bb.push_back(inp);
+        vector<int> bb;
+        int a = 0;
+        for (int j = 0; j < n; j++) {
+            cin >> w;
+            bb.push_back(w);
         }
 
-        // editorial :)
-        ll j = n - 1;
-        while (j > 0 && bb[j - 1] >= bb[j]) --j;
-        while (j > 0 && bb[j - 1] <= bb[j]) --j;
-        cout << j << eol;
+        bool setN = false;
+        int maxN = 0;
+        for (int s = 2; s < 2 * n + 1; s++) {
+            int n_teams = 0;
+            // debug(_(s));
+            bitset<50> teams;
+            for (int j = 0; j < n - 1; j++) {
+                if (teams[j])
+                    continue;
+
+                for (int k = j + 1; k < n; k++) {
+                    if (teams[k])
+                        continue;
+                    
+                    if (bb[j] + bb[k] == s) {
+                        n_teams++;
+
+                        teams[j] = 1;
+                        teams[k] = 1;
+                        break;
+                    }
+                }
+            }
+
+            if (!setN) {
+                maxN = n_teams;
+                setN = true;
+            } else if (n_teams > maxN) {
+                maxN = n_teams;
+            }
+        }
+
+        cout << maxN << eol;
     }
 }

@@ -17,20 +17,46 @@ const ll MOD = 1e9 + 7;
 int main() {
     ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
     
-    ll t, n, inp;
+    int t, n;
     cin >> t;
-    for (ll i = 0; i < t; i++) {
+
+    unsigned ll a, b, minA, minB, p, l;
+    for (int i = 0; i < t; i++) {
         cin >> n;
-        vector<ll> bb;
-        for (ll j = 0; j < n; j++) {
-            cin >> inp;
-            bb.push_back(inp);
+        vector<unsigned ll> aa, bb;
+        for (int j = 0; j < n; j++) {
+            cin >> a;
+            if (j == 0)
+                minA = a;
+            else if (a < minA)
+                minA = a;
+            aa.push_back(a);
         }
 
-        // editorial :)
-        ll j = n - 1;
-        while (j > 0 && bb[j - 1] >= bb[j]) --j;
-        while (j > 0 && bb[j - 1] <= bb[j]) --j;
-        cout << j << eol;
+        for (int j = 0; j < n; j++) {
+            cin >> b;
+            bb.push_back(b);
+            if (j == 0)
+                minB = b;
+            else if (b < minB)
+                minB = b;
+        }
+
+        // debug(_(aa) << _(minA));
+        // debug(_(bb) << _(minB));
+
+        ll moves = 0;
+        for (int j = 0; j < n; j++) {
+            if (aa[j] > minA && bb[j] > minB) {
+                p = min(aa[j] - minA, bb[j] - minB);
+                l = max(aa[j] - minA, bb[j] - minB);
+                moves += p + l - p;
+                continue;
+            }
+            
+            moves += (aa[j] - minA);
+            moves += (bb[j] - minB);
+        }
+        cout << moves << eol;
     }
 }

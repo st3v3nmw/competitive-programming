@@ -17,20 +17,28 @@ const ll MOD = 1e9 + 7;
 int main() {
     ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
     
-    ll t, n, inp;
+    int t, n, m;
     cin >> t;
-    for (ll i = 0; i < t; i++) {
+
+    for (int i = 0; i < t; i++) {
         cin >> n;
-        vector<ll> bb;
-        for (ll j = 0; j < n; j++) {
-            cin >> inp;
-            bb.push_back(inp);
+        vector<int> bb;
+        for (int j = 0; j < n; j++) {
+            cin >> m;
+            bb.push_back(m);
         }
 
-        // editorial :)
-        ll j = n - 1;
-        while (j > 0 && bb[j - 1] >= bb[j]) --j;
-        while (j > 0 && bb[j - 1] <= bb[j]) --j;
-        cout << j << eol;
+        sort(bb.begin(), bb.end());
+        // debug(_(bb));
+
+        for (int j = 0; j < n - 1; j++) {
+            if (bb[j + 1] - bb[j] > 1) {
+                cout << "NO" << endl;
+                goto outer;
+            }
+        }
+        cout << "YES" << endl;
+        outer:
+        continue;
     }
 }
