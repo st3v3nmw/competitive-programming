@@ -17,4 +17,23 @@ const ll MOD = 1e9 + 7;
 int main() {
     ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
     
+    int t, k, c;
+    cin >> t >> k;
+    int n = t;
+    vector<int> bb;
+    while (t--) {
+        cin >> c;
+        bb.push_back(c);
+    }
+
+    sort(bb.begin(), bb.end());
+    reverse(bb.begin(), bb.end());
+
+    int count = 0;
+    for (int i = 0; i < n; i++) {
+        if (bb[i] >= bb[k - 1] && bb[i] != 0)
+            count++;
+    }
+    
+    cout << count << eol;
 }
