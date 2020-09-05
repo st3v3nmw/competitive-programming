@@ -21,27 +21,13 @@ int main() {
     cin >> t;
     ll x, y, n;
     while (t--) {
-        ll p;
         cin >> x >> y >> n;
-        // if (y == 0)
-        //     d = n % x;
-        // else
-        //     d = min(n % x, n %  y);
-        // n -= d;
-        // if (n < 0)
-        //     n += d;
-        for (ll d = n; d >= 0; d--) {
-            if (y == 0)
-                p = n % x;
-            else
-                p = min(n % x, n %  y);
-            n -= p;
+        ll d = n % x;
+        ll u = n - d + y;
 
-            if (d % x == y) {
-                cout << d << eol;
-                break;
-            }
-
-        }
+        if (u <= n)
+            cout << u << eol;
+        else
+            cout << n - d - (x - y) << eol;
     }
 }
