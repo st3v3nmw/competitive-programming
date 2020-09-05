@@ -97,7 +97,7 @@ int main() {
         // }
         // debug(_(n - goodString(bb, 0, n - 1, 'a'))); // check if it's a-good
 
-		cin >> n >> s;
-		cout << calc(s, 'a') << endl;
+        cin >> n >> s;
+        cout << calc(s, 'a') << endl;
     }
 }

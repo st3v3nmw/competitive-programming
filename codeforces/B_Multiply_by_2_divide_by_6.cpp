@@ -19,7 +19,31 @@ int main() {
     
     int t = 1;
     cin >> t;
+    ll moves , r;
     while (t--) {
+        cin >> r;
+        if (r == 1) {
+            cout << 0 << eol;
+            continue;
+        }
+
+
+        moves = 0;
+        while (r > 1) {
+            moves += 1;
+            r = r % 6 == 0 ? r / 6 : 2 * r;
+
+            if (r == 1)
+                break;
+
+            if (r % 3 != 0) {
+                cout << -1 << eol;
+                goto end;
+            }
+        }
         
+        cout << moves << eol;
+        end:
+        continue;
     }
 }
