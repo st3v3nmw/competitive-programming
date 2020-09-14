@@ -14,8 +14,29 @@ template <typename T1, typename T2> string to_str(map<T1, T2> x) { string r = "{
 #define ll long long
 const ll MOD = 1e9 + 7;
 
+void sieve(ll n) {
+    vector<ll> is_prime(n+2, 1);
+    bool composite = false;
+    for (ll i = 2; i <= n + 1; i++) {
+        if (is_prime[i] == 1) {
+            for (ll j = i * i; j <= n + 1; j += i) {
+                composite = true;
+                is_prime[j] = 2;
+            }
+        }
+    }
+
+    cout << (composite ? 2 : 1) << eol;
+    for (ll i = 2; i <= n + 1; i++)
+        cout << is_prime[i] << " ";
+    cout << eol;
+}
+
 int main() {
     ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
     
-    // TODO
+    int n;
+    cin >> n;
+
+    sieve(n);
 }

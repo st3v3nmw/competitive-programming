@@ -19,7 +19,7 @@ int main() {
     
     int t;
     cin >> t;
-    while (t--) {
-        
+    for (int d = 0; d < t; d++) {
+
     }
 }

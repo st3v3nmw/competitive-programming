@@ -14,8 +14,31 @@ template <typename T1, typename T2> string to_str(map<T1, T2> x) { string r = "{
 #define ll long long
 const ll MOD = 1e9 + 7;
 
+vector<int> suffix_array(const char* s) {
+    vector<int> s_array;
+    for (int i = 0; i < strlen(s); i++) {
+        s_array.push_back(i);
+    }
+
+    size_t t = strlen(s);
+    auto cmp = [&s, &t](int a, int b) {
+        if (strcmp(s + a, s + b) < 0)
+            return true;
+        return false;
+    };
+
+    sort(s_array.begin(), s_array.end(), cmp);
+    return s_array;
+}
+
 int main() {
     ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
     
-    // TODO
+    char s[100000], d[] = "$";
+    scanf("%s", s);
+    strcat(s, d);
+
+    vector<int> v = suffix_array(s);
+    for (int i = 0; i < v.size(); i++)
+        cout << v[i] << " ";
 }

@@ -3,10 +3,20 @@
 #define GCD(a,b) __gcd(a, b);
 #define LCM(a,b) (a) * ((b) / __gcd(a, b));
 
-template <typename T>
-T modpow(T base, T exp, T modulus) {
+long long binpow(long long base, long long exp) {
+    long long result = 1;
+    while (exp > 0) {
+        if (exp & 1)
+            result *= base;
+        base *= base;
+        exp >>= 1;
+    }
+    return result;
+}
+
+long long modpow(long long base, long long exp, long long modulus) {
     base %= modulus;
-    T result = 1;
+    long long result = 1;
     while (exp > 0) {
         if (exp & 1)
             result = (result * base) % modulus;

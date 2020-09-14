@@ -14,8 +14,20 @@ template <typename T1, typename T2> string to_str(map<T1, T2> x) { string r = "{
 #define ll long long
 const ll MOD = 1e9 + 7;
 
+template <typename T>
+T gcd(T m, T n) { // Compute the GCD of m & n using Euclid's Algorithm
+    if (n == 0) return fabs(m);
+    return gcd(n, m % n);
+}
+
 int main() {
     ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
     
-    // TODO
+    ll t, a, b, g;
+    cin >> t;
+    for (int d = 0; d < t; d++) {
+        cin >> a >> b;
+        g = gcd(a, b);
+        cout << g << " " << (a * b) / g << endl;
+    }
 }
