@@ -9,18 +9,45 @@ string to_string(char x) { string r = ""; r += x; return "\'" + r + "\'";}
 string to_string(bool x) { return x ? "true" : "false"; }
 template <typename T> string to_str(T x) { return to_string(x); }
 template <typename T1, typename T2> string to_str(pair<T1, T2> x) { return "(" + to_str(x.first) + ", " + to_str(x.second) + ")"; }
-template <typename T> string to_str(vector<T> x) { string r = "{"; for (auto t : x) r += to_str(t) + ", "; return r.substr(0, r.length() - 2) + "}"; }
 template <typename T1, typename T2> string to_str(map<T1, T2> x) { string r = "{"; for (auto t : x) r += to_str(t.first) + ": " + to_str(t.second) + ", "; return r.substr(0, r.length() - 2) + "}"; }
-#define ull unsigned long long
-#define ll long long
-const ull MOD = 1e9 + 7;
+template <typename T> string to_str(vector<T> x) { string r = "{"; for (auto t : x) r += to_str(t) + ", "; return r.substr(0, r.length() - 2) + "}"; }
+
+void trial_division(unsigned int x, vector<unsigned int>& mp) {
+    mp[x]++;
+    unsigned int upper = sqrt(x);
+    for (unsigned int d = 2; d <= upper; d++) {
+        if (x % d == 0) {
+            if (x / d != d) {
+                mp[d]++;
+                mp[x / d]++;
+            } else
+                mp[d]++;
+        }
+    }
+}
 
 int main() {
     ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
     
-    uint t;
-    cin >> t;
-    for (uint d = 0; d < t; d++) {
+    vector<unsigned int> mp(1000001, 0);
+    bitset<1000001> seen;
 
+    unsigned int t, n, mmax = 0;
+    cin >> t;
+    for (unsigned int d = 0; d < t; d++) {
+        cin >> n;
+        mmax = max(n, mmax);
+        if (!seen[n]) {
+            trial_division(n, mp);
+            seen[n] = 1;
+        } else
+            mp[n]++;
+    }
+
+    for (unsigned int i = mmax; i > 0; i--) {
+        if (mp[i] > 1) {
+            cout << i << eol;
+            break;
+        }
     }
 }
