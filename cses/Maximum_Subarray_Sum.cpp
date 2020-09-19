@@ -15,12 +15,28 @@ template <typename T1, typename T2> string to_str(map<T1, T2> x) { string r = "{
 #define ull unsigned ll
 const ull MOD = 1e9 + 7;
 
+ll kadane(const vector<ll>& v) {
+    ll ans = 0, mmax = v[0];
+    for (ll e : v) {
+        if (e + ans < 0) {
+            ans = 0;
+            mmax = max(mmax, e);
+        } else {
+            ans += e;
+            mmax = max(mmax, ans);
+        }
+    }
+    return mmax;
+}
+
 int main() {
     ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
     
     uint t;
     cin >> t;
+    vector<ll> v(t);
     for (uint d = 0; d < t; d++) {
-
+        cin >> v[d];
     }
+    cout << kadane(v) << endl;
 }

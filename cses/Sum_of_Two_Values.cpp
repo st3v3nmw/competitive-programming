@@ -18,9 +18,23 @@ const ull MOD = 1e9 + 7;
 int main() {
     ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
     
-    uint t;
-    cin >> t;
-    for (uint d = 0; d < t; d++) {
-
+    uint n, x, q;
+    cin >> n >> x;
+    vector<pair<uint, uint>> v(n); 
+    for (uint d = 0; d < n; d++) {
+        cin >> q;
+        v[d] = {q, d};
     }
+    sort(v.begin(), v.end());
+
+    for (uint i = 0; i < n; i++) {
+        uint d = lower_bound(v.begin(), v.end(), pair<uint, uint>(x - v[i].first, 0)) - v.begin();
+        if (v[i].first + v[d].first == x && v[i].second != v[d].second) {
+            if (v[i].second > v[d].second)
+                swap(v[i], v[d]);
+            cout << v[i].second + 1 << " " << v[d].second + 1 << eol;
+            return 0;
+        }
+    }
+    cout << "IMPOSSIBLE\n";
 }

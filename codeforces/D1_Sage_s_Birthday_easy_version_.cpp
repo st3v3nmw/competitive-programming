@@ -18,9 +18,32 @@ const ull MOD = 1e9 + 7;
 int main() {
     ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
     
-    uint t;
+    unsigned int t;
     cin >> t;
-    for (uint d = 0; d < t; d++) {
-
+    vector<ull> q;
+    ull count = 0, p;
+    for (int d = 0; d < t; d++) {
+        cin >> p;
+        q.push_back(p);
     }
+
+    if (t == 1) {
+        cout << 0 << endl;
+        cout << q[0] << endl;
+        return 0;
+    }
+
+    sort(q.begin(), q.end());
+
+    ull sz = q.size() / 2;
+    if (q.size() % 2 == 0)
+        cout << sz - 1 << endl;
+    else
+        cout << sz << endl;
+    for (int d = 0; d < q.size() / 2; d++) {
+        cout << q[sz + d] << " " << q[d] << " ";
+    }
+    if (t % 2 == 1)
+        cout << q[t - 1];
+    cout << "\n";
 }

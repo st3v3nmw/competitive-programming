@@ -18,9 +18,22 @@ const ull MOD = 1e9 + 7;
 int main() {
     ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
     
-    uint t;
+    uint t, q;
     cin >> t;
+    vector<uint> top;
     for (uint d = 0; d < t; d++) {
-
+        cin >> q;
+        if (top.size() == 0)
+            top.push_back(q);
+        else {
+            uint idx = upper_bound(top.begin(), top.end(), q) - top.begin();
+            if (top[idx] <= q)
+                top.push_back(q);
+            else
+                top[idx] = q;
+        }
+        // debug(_(top));
     }
+    // debug(_(top));
+    cout << top.size() << endl;
 }

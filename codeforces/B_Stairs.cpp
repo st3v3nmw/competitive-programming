@@ -18,9 +18,13 @@ const ull MOD = 1e9 + 7;
 int main() {
     ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
     
-    uint t;
+    int t;
     cin >> t;
-    for (uint d = 0; d < t; d++) {
-
+    ull q;
+    for (int d = 0; d < t; d++) {
+        cin >> q;
+        q *= 2;
+        ull n = (2 + sqrt(4 + 8 * q)) / 4;
+        cout << sqrt(0.25 + 4 * q) / 2 << endl;
     }
 }
