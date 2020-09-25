@@ -3,8 +3,8 @@
 // __gcd(a, b)
 
 // exponentiation
-uint binpow(int base, uint exp) {
-    uint result = 1;
+ull binpow(ll base, ull exp) {
+    ull result = 1;
     while (exp > 0) {
         if (exp & 1)
             result *= base;
@@ -14,9 +14,9 @@ uint binpow(int base, uint exp) {
     return result;
 }
 
-uint modpow(int base, uint exp, uint modulus) {
+ull modpow(ll base, ull exp, ull modulus) {
     base %= modulus;
-    uint result = 1;
+    ull result = 1;
     while (exp > 0) {
         if (exp & 1)
             result = (result * base) % modulus;

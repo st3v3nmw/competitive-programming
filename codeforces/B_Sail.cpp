@@ -15,12 +15,41 @@ template <typename T1, typename T2> string to_str(map<T1, T2> x) { string r = "{
 #define ull unsigned ll
 const ull MOD = 1e9 + 7;
 
+inline float dist(int x1, int y1, int x2, int y2) {
+    return sqrt(abs(x1 - x2) + abs(y1 - y2));
+}
+
 int main() {
     ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
     
-    int g;
-    cin >> g;
-    for (int t = 0; t < g; t++) {
+    int t, cx, cy, ex, ey;
+    cin >> t >> cx >> cy >> ex >> ey;
+    char c;
+    int d;
+    for (d = 0; d < t; d++) {
+        if (cx == ex && ey == cy) {
+            cout << d << eol;
+            return 0;
+        }
 
+        cin >> c;
+        if (c == 'N') {
+            if (dist(cx, cy + 1, ex, ey) <= dist(cx, cy, ex, ey))
+                cy += 1;
+        } else if (c == 'S') {
+            if (dist(cx, cy - 1, ex, ey) <= dist(cx, cy, ex, ey))
+                cy -= 1;
+        } else if (c == 'E') {
+            if (dist(cx + 1, cy, ex, ey) <= dist(cx, cy, ex, ey))
+                cx += 1;
+        } else {
+            if (dist(cx - 1, cy, ex, ey) <= dist(cx, cy, ex, ey))
+                cx -= 1;
+        }
     }
+
+    if (cx == ex && ey == cy)
+        cout << d << eol;
+    else
+        cout << -1 << eol;
 }

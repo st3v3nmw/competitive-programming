@@ -18,9 +18,20 @@ const ull MOD = 1e9 + 7;
 int main() {
     ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
     
-    int g;
-    cin >> g;
-    for (int t = 0; t < g; t++) {
-
+    string s;
+    int k;
+    cin >> s;
+    cin >> k;
+    if (k > s.size())
+        cout << "impossible\n";
+    else {
+        unordered_set<char> us;
+        for (char c : s)
+            us.insert(c);
+        if (us.size() > k)
+            cout << 0 << eol;
+        else
+            cout << k - us.size() << eol;
     }
+    
 }

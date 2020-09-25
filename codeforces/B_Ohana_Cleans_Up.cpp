@@ -18,9 +18,20 @@ const ull MOD = 1e9 + 7;
 int main() {
     ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
     
-    int g;
-    cin >> g;
-    for (int t = 0; t < g; t++) {
-
+    int t;
+    cin >> t;
+    string s;
+    map<string, int> mp;
+    for (int d = 0; d < t; d++) {
+        cin >> s;
+        if (mp.find(s) != mp.end())
+            mp[s]++;
+        else
+            mp[s] = 1;
     }
+    // debug(_(mp));
+    int mmax = 0;
+    for (pair<string, int> e : mp)
+        mmax = max(e.second, mmax);
+    cout << mmax << eol;
 }

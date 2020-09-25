@@ -18,9 +18,10 @@ const ull MOD = 1e9 + 7;
 int main() {
     ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
     
-    int g;
-    cin >> g;
-    for (int t = 0; t < g; t++) {
-
-    }
+    ull n, m;
+    cin >> n >> m;
+    if (n >= ceil(log2(1e8)))
+        cout << m << endl;
+    else
+        cout << m % (ull) pow(2, n) << endl;
 }

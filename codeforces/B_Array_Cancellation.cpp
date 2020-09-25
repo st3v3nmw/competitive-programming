@@ -18,9 +18,23 @@ const ull MOD = 1e9 + 7;
 int main() {
     ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
     
-    int g;
-    cin >> g;
-    for (int t = 0; t < g; t++) {
-
+    int t, n, ch;
+    cin >> t;
+    ll neg, pos, k;
+    for (int d = 0; d < t; d++) {
+        cin >> n;
+        neg = 0, pos = 0;
+        for (int i = 0; i < n; i++) {
+            cin >> k;
+            if (k < 0) {
+                ch = min(abs(k), pos);
+                neg += k;
+                neg += ch;
+                pos -= ch;
+            } else {
+                pos += k;
+            }
+        }
+        cout << pos << endl;
     }
 }

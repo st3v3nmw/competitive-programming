@@ -18,9 +18,16 @@ const ull MOD = 1e9 + 7;
 int main() {
     ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
     
-    int g;
-    cin >> g;
-    for (int t = 0; t < g; t++) {
-
+    ull k, l;
+    cin >> k >> l;
+    ull r = 1;
+    int c = 0;
+    while (r * k <= l) {
+        c++;
+        r *= k;
     }
+    if (r == l) {
+        cout << "YES\n" << c - 1 << eol;
+    } else
+        cout << "NO" << eol;
 }

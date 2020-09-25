@@ -18,9 +18,16 @@ const ull MOD = 1e9 + 7;
 int main() {
     ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
     
-    int g;
-    cin >> g;
-    for (int t = 0; t < g; t++) {
-
+    int t, n;
+    cin >> t;
+    for (int d = 0; d < t; d++) {
+        cin >> n;
+        vector<int> v(n);
+        for (int i = 0; i < n; i++)
+            cin >> v[i];
+        reverse(v.rbegin(), v.rend());
+        for (int e : v)
+            cout << e << " ";
+        cout << eol;
     }
 }

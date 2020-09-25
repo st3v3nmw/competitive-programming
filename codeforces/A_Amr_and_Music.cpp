@@ -18,9 +18,29 @@ const ull MOD = 1e9 + 7;
 int main() {
     ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
     
-    int g;
-    cin >> g;
+    int g, d, p;
+    cin >> g >> d;
+    vector<pair<int, int>> v;
     for (int t = 0; t < g; t++) {
-
+        cin >> p;
+        v.push_back({p, t});
+    }
+    sort(v.begin(), v.end());
+    int s = 0;
+    vector<int> r;
+    for (int i = 0; i < g; i++) {
+        if (s + v[i].first <= d) {
+            s += v[i].first;
+            r.push_back(v[i].second);
+        } else {
+            break;
+        }
+    }
+    sort(r.begin(), r.end());
+    cout << r.size() << eol;
+    if (r.size() != 0) {
+        for (int e : r)
+            cout << e + 1 << " ";
+        cout << eol;
     }
 }

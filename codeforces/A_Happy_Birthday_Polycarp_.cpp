@@ -18,9 +18,14 @@ const ull MOD = 1e9 + 7;
 int main() {
     ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
     
-    int g;
-    cin >> g;
-    for (int t = 0; t < g; t++) {
-
+    int t, n, c;
+    cin >> t;
+    for (int g = 0; g < t; g++) {
+        cin >> n;
+        c = floor(log10(n)) * 9;
+        int d = (pow(10, c / 9 + 1) - 1) / 9;
+        for (int s = d; s <= n; s += d)
+            c++;
+        cout << c << eol;
     }
 }

@@ -15,12 +15,38 @@ template <typename T1, typename T2> string to_str(map<T1, T2> x) { string r = "{
 #define ull unsigned ll
 const ull MOD = 1e9 + 7;
 
+ull factorial_iterative_mod(ull n) {
+    ull result = 1;
+    for (int i = 2; i <= n; i++)
+        result = (__uint128_t) (result * i) % MOD;
+    return result;
+}
+
+ull modpow(ull base, ull exp, ull modulus) {
+    base %= modulus;
+    ull result = 1;
+    while (exp > 0) {
+        if (exp & 1)
+            result = (result * base) % modulus;
+        base = (base * base) % modulus;
+        exp >>= 1;
+    }
+    return result;
+}
+
 int main() {
     ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
     
-    int g;
-    cin >> g;
-    for (int t = 0; t < g; t++) {
-
-    }
+    string s;
+    cin >> s;
+    vector<int> count(26);
+    for (char e : s)
+        count[e - 'a']++;
+    int sz = s.size();
+    ull num = factorial_iterative_mod(sz);
+    ull den = 1;
+    for (int e : count)
+        den = (den * factorial_iterative_mod(e)) % MOD;
+    // debug(_(count));
+    cout << (num * modpow(den, MOD - 2, MOD)) % MOD << endl;
 }
