@@ -15,34 +15,25 @@ template <typename T1, typename T2> string to_str(map<T1, T2> x) { string r = "{
 #define ull unsigned ll
 const ull MOD = 1e9 + 7;
 
-bool solve(int n, int curr, int sum, vector<int>& v) {
-    if (n - sum == 0)
-        return true;
-    else if (n - sum < curr)
-        return false;
-    
-    curr++;
-    if (solve(n, curr, sum + curr, v))
-        v.push_back(curr);
-    else {
-        curr++;
-        if (solve(n, curr, sum + curr, v))
-            v.push_back(curr);
-        else
-            return false;
-    }
-    return true;
-}
-
 int main() {
     ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
     
-    int n, t = 0;
-    cin >> n;
-    vector<int> v;
-    solve(n, 0, 0, v);
-    cout << v.size() << eol;
-    for (int i = v.size() - 1; i >= 0; i--)
-        cout << v[i] << " ";
-    cout << eol;
+    int a1, a2, c = 0;
+    cin >> a1 >> a2;
+    if (a1 < 2 && a2 < 2) {
+        cout << 0 << eol;
+        return 0;
+    }
+
+    while (a1 > 0 && a2 > 0) {
+        c++;
+        if (a1 > a2) {
+            a1 -= 2;
+            a2++;
+        } else {
+            a2 -= 2;
+            a1++;
+        }
+    }
+    cout << c << eol;
 }

@@ -15,34 +15,38 @@ template <typename T1, typename T2> string to_str(map<T1, T2> x) { string r = "{
 #define ull unsigned ll
 const ull MOD = 1e9 + 7;
 
-bool solve(int n, int curr, int sum, vector<int>& v) {
-    if (n - sum == 0)
-        return true;
-    else if (n - sum < curr)
-        return false;
-    
-    curr++;
-    if (solve(n, curr, sum + curr, v))
-        v.push_back(curr);
-    else {
-        curr++;
-        if (solve(n, curr, sum + curr, v))
-            v.push_back(curr);
-        else
-            return false;
-    }
-    return true;
-}
-
 int main() {
     ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
     
-    int n, t = 0;
-    cin >> n;
-    vector<int> v;
-    solve(n, 0, 0, v);
-    cout << v.size() << eol;
-    for (int i = v.size() - 1; i >= 0; i--)
-        cout << v[i] << " ";
-    cout << eol;
+    ull g, n;
+    cin >> g >> n;
+    vector<char> a(g);
+    unordered_set<char> b;
+    char p;
+    for (ull t = 0; t < g; t++)
+        cin >> a[t];
+    for (ull t = 0; t < n; t++) {
+        cin >> p;
+        b.insert(p);
+    }
+    for (ull t = 0; t < g; t++) {
+        if (b.find(a[t]) != b.end())
+            a[t] = '1';
+        else
+            a[t] = '0';
+    }
+    // debug(_(a));
+    ull p1 = 0, p2 = 1;
+    ull t = 0;
+    while (p1 != p2 && p1 < g && p2 < g) {
+        while (a[p2] == '1' && p2 < g)
+            p2++;
+        while (a[p1] == '0' && p1 < p2 - 1)
+            p1++;
+        // cout << p1 << " " << p2 << eol;
+        if (a[p1] == '1' && (a[p2] == '0' || p2 == g))
+            t += ((p2 - p1) * (p2 - p1 + 1)) / 2;
+        p1 = p2; p2++;
+    }
+    cout << t << eol;
 }

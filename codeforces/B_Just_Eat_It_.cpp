@@ -15,34 +15,40 @@ template <typename T1, typename T2> string to_str(map<T1, T2> x) { string r = "{
 #define ull unsigned ll
 const ull MOD = 1e9 + 7;
 
-bool solve(int n, int curr, int sum, vector<int>& v) {
-    if (n - sum == 0)
-        return true;
-    else if (n - sum < curr)
-        return false;
-    
-    curr++;
-    if (solve(n, curr, sum + curr, v))
-        v.push_back(curr);
-    else {
-        curr++;
-        if (solve(n, curr, sum + curr, v))
-            v.push_back(curr);
-        else
-            return false;
-    }
-    return true;
-}
-
 int main() {
     ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
     
-    int n, t = 0;
-    cin >> n;
-    vector<int> v;
-    solve(n, 0, 0, v);
-    cout << v.size() << eol;
-    for (int i = v.size() - 1; i >= 0; i--)
-        cout << v[i] << " ";
-    cout << eol;
+    int g, n;
+    cin >> g;
+    for (int t = 0; t < g; t++) {
+        ll total = 0, sub = 0;
+        cin >> n;
+        vector<ll> v(n);
+        for (int i = 0; i < n; i++) {
+            cin >> v[i];
+            total += v[i];
+        }
+        int s = 0;
+        for (int i = 0; i < n - 1; i++) {
+            if (v[i] + sub <= 0) {
+                sub = 0;
+                s = i + 1;
+            } else
+                sub += v[i];
+            if (sub >= total) {
+                cout << "NO\n";
+                goto end;
+            }
+        }
+        if (s == 0 && sub > 0) {
+            sub = max(sub, v[n - 1]);
+            cout << (sub >= total ? "NO\n" : "YES\n");
+            continue;
+        }
+        if (v[n - 1] > 0)
+            sub += v[n - 1];
+        cout << (sub >= total ? "NO\n" : "YES\n");
+        end:
+            continue;
+    }
 }

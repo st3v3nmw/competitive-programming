@@ -13,7 +13,7 @@ int main() {
     int upper = sqrt(g);
     while (g > 1 && d <= upper) {
         if (g % d == 0) {
-            cout << g / d << eol;
+            cout << 1 + (g - d) / 2 << eol;
             return 0;
         } else
             d++;

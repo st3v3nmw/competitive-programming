@@ -15,34 +15,35 @@ template <typename T1, typename T2> string to_str(map<T1, T2> x) { string r = "{
 #define ull unsigned ll
 const ull MOD = 1e9 + 7;
 
-bool solve(int n, int curr, int sum, vector<int>& v) {
-    if (n - sum == 0)
-        return true;
-    else if (n - sum < curr)
-        return false;
-    
-    curr++;
-    if (solve(n, curr, sum + curr, v))
-        v.push_back(curr);
-    else {
-        curr++;
-        if (solve(n, curr, sum + curr, v))
-            v.push_back(curr);
-        else
-            return false;
-    }
-    return true;
-}
-
 int main() {
     ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
     
-    int n, t = 0;
-    cin >> n;
-    vector<int> v;
-    solve(n, 0, 0, v);
-    cout << v.size() << eol;
-    for (int i = v.size() - 1; i >= 0; i--)
-        cout << v[i] << " ";
-    cout << eol;
+    int g, w, h;
+    cin >> g;
+    ll width = 0;
+    vector<pair<int, int>> us, hs;
+    map<int, int, greater<int>> mp;
+    for (int t = 0; t < g; t++) {
+        cin >> w >> h;
+        width += w;
+        us.push_back({w, h});
+        mp[h]++;
+    }
+
+    for (const auto& p : mp)
+        hs.push_back({p.second, p.first});
+    ll total = hs[0].second * width;
+    if (hs[0].first > 1) {
+        for (pair<int, int> e : us)
+            cout << total - e.first * hs[0].second << " ";
+        cout << eol;
+    } else {
+        for (pair<int, int> e : us) {
+            if (e.second == hs[0].second)
+                cout << hs[1].second * width - e.first * hs[1].second << " ";
+            else
+                cout << total - e.first * hs[0].second << " ";
+        }
+        cout << eol;
+    }
 }

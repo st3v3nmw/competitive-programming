@@ -15,34 +15,38 @@ template <typename T1, typename T2> string to_str(map<T1, T2> x) { string r = "{
 #define ull unsigned ll
 const ull MOD = 1e9 + 7;
 
-bool solve(int n, int curr, int sum, vector<int>& v) {
-    if (n - sum == 0)
-        return true;
-    else if (n - sum < curr)
-        return false;
-    
-    curr++;
-    if (solve(n, curr, sum + curr, v))
-        v.push_back(curr);
-    else {
-        curr++;
-        if (solve(n, curr, sum + curr, v))
-            v.push_back(curr);
-        else
-            return false;
-    }
-    return true;
-}
-
 int main() {
     ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
     
-    int n, t = 0;
-    cin >> n;
-    vector<int> v;
-    solve(n, 0, 0, v);
-    cout << v.size() << eol;
-    for (int i = v.size() - 1; i >= 0; i--)
-        cout << v[i] << " ";
-    cout << eol;
+    int g, r, c, x, y;
+    cin >> g;
+    for (int t = 0; t < g; t++) {
+        int total = 0;
+        cin >> r >> c >> x >> y;
+        for (int i = 0; i < r; i++) {
+            vector<char> v(c);
+            for (int j = 0; j < c; j++)
+                cin >> v[j];
+            bool last_filled = false;
+            for (int j = 0; j < c - 1; j++) {
+                if (v[j] == '.') {
+                    if (x <= y / 2.0)
+                        total += x;
+                    else {
+                        if (v[j + 1] == '.') {
+                            if (j + 2 == c)
+                                last_filled = true;
+                            total += y;
+                            j++;
+                        } else
+                            total += x;
+                    }
+                }
+            }
+
+            if (v[c - 1] == '.' && !last_filled)
+                total += x;
+        }
+        cout << total << eol;
+    }
 }
