@@ -12,17 +12,25 @@ template <typename T1, typename T2> string to_str(pair<T1, T2> x) { return "(" +
 template <typename T> string to_str(vector<T> x) { string r = "{"; for (auto t : x) r += to_str(t) + ", "; return r.substr(0, r.length() - 2) + "}"; }
 template <typename T1, typename T2> string to_str(map<T1, T2> x) { string r = "{"; for (auto t : x) r += to_str(t.first) + ": " + to_str(t.second) + ", "; return r.substr(0, r.length() - 2) + "}"; }
 #define ll long long
-const ll MOD = 1e9 + 7;
+#define ull unsigned ll
+const ull MOD = 1e9 + 7;
 
 int main() {
     ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
-
-    // TODO
-    int t;
-    cin >> t;
-    for (int d = 0; d < t; d++) {
-        int n;
-        bool first;
+    
+    int g, n, q;
+    cin >> g;
+    for (int t = 0; t < g; t++) {
         cin >> n;
+        bool f = false;
+        for (int i = 0; i < n; i++) {
+            cin >> q;
+            if (q > 1 && !f) {
+                cout << (i % 2 == 0 ? "First\n" : "Second\n");
+                f = true;
+            }
+        }
+        if (!f)
+            cout << (n & 1 ? "First\n" : "Second\n");
     }
 }

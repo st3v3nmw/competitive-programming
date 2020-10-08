@@ -9,7 +9,7 @@ string to_string(char x) { string r = ""; r += x; return "\'" + r + "\'";}
 string to_string(bool x) { return x ? "true" : "false"; }
 template <typename T> string to_str(T x) { return to_string(x); }
 template <typename T1, typename T2> string to_str(pair<T1, T2> x) { return "(" + to_str(x.first) + ", " + to_str(x.second) + ")"; }
-template <typename T> string to_str(vector<T> x) { string r = "{"; for (auto t : x) r += to_str(t) + ", "; return r.substr(0, r.length() - 2) + "}"; }
+template <typename T> string to_str(set<T> x) { string r = "{"; for (auto t : x) r += to_str(t) + ", "; return r.substr(0, r.length() - 2) + "}"; }
 template <typename T1, typename T2> string to_str(map<T1, T2> x) { string r = "{"; for (auto t : x) r += to_str(t.first) + ": " + to_str(t.second) + ", "; return r.substr(0, r.length() - 2) + "}"; }
 #define ll long long
 #define ull unsigned ll
@@ -20,19 +20,17 @@ int main() {
     
     int g;
     cin >> g;
-    int n, m, x1, x2, x3, x4;
-    for (int t = 0; t < g; t++) {
-        cin >> n >> m;
-        bool f = false;
-        for (int i = 0; i < n; i++) {
-            vector<int> q(4);
-            cin >> q[0] >> q[1] >> q[2] >> q[3];
-            if (q[1] == q[2])
-                f = true;
+    while (true) {
+        g++;
+        set<int> b;
+        int t = g;
+        while (t > 0) {
+            b.insert(t % 10);
+            t /= 10;
         }
-        if (m & 1)
-            cout << "NO\n";
-        else
-            cout << (f ? "YES\n" : "NO\n");
+        if (b.size() == 4) {
+            cout << g << eol;
+            break;
+        }
     }
 }

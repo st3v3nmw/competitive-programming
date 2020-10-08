@@ -11,28 +11,30 @@ template <typename T> string to_str(T x) { return to_string(x); }
 template <typename T1, typename T2> string to_str(pair<T1, T2> x) { return "(" + to_str(x.first) + ", " + to_str(x.second) + ")"; }
 template <typename T> string to_str(vector<T> x) { string r = "{"; for (auto t : x) r += to_str(t) + ", "; return r.substr(0, r.length() - 2) + "}"; }
 template <typename T1, typename T2> string to_str(map<T1, T2> x) { string r = "{"; for (auto t : x) r += to_str(t.first) + ": " + to_str(t.second) + ", "; return r.substr(0, r.length() - 2) + "}"; }
-#define ll long long
-#define ull unsigned ll
-const ull MOD = 1e9 + 7;
 
 int main() {
-    ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
-    
-    int g;
+    int g, t, st, m;
     cin >> g;
-    int n, m, x1, x2, x3, x4;
-    for (int t = 0; t < g; t++) {
-        cin >> n >> m;
-        bool f = false;
-        for (int i = 0; i < n; i++) {
-            vector<int> q(4);
-            cin >> q[0] >> q[1] >> q[2] >> q[3];
-            if (q[1] == q[2])
-                f = true;
+    while (g--) {
+        cin >> t;
+        map<char, long long> mp;
+        char c;
+        while (t--) {
+            cin >> c >> st;
+            mp[c] = st;
         }
-        if (m & 1)
-            cout << "NO\n";
-        else
-            cout << (f ? "YES\n" : "NO\n");
+        double cost = 0;
+        cin >> m;
+        m++;
+        while (m--) {
+            string s;
+            getline(cin, s);
+            for (char c : s) {
+                if (mp.find(c) != mp.end())
+                    cost += mp[c];
+            }
+        }
+        cost /= 100;
+        printf("%llu.%d$\n", (long long) floor(cost), (int) (floor((cost - floor(cost)) * 100)));
     }
 }

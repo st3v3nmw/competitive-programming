@@ -6,47 +6,43 @@ using namespace std;
 #define debug(x) { ostringstream stream; stream << x; string s = stream.str(); cout << s.substr(0, s.length() - 2) << eol; }
 string to_string(basic_string<char>& x) { return "\"" + x + "\""; }
 string to_string(char x) { string r = ""; r += x; return "\'" + r + "\'";}
+string to_string(bool x) { return x ? "true" : "false"; }
 template <typename T> string to_str(T x) { return to_string(x); }
 template <typename T1, typename T2> string to_str(pair<T1, T2> x) { return "(" + to_str(x.first) + ", " + to_str(x.second) + ")"; }
 template <typename T> string to_str(vector<T> x) { string r = "{"; for (auto t : x) r += to_str(t) + ", "; return r.substr(0, r.length() - 2) + "}"; }
 template <typename T1, typename T2> string to_str(map<T1, T2> x) { string r = "{"; for (auto t : x) r += to_str(t.first) + ": " + to_str(t.second) + ", "; return r.substr(0, r.length() - 2) + "}"; }
 #define ll long long
-const ll MOD = 1e9 + 7;
+#define ull unsigned ll
+const ull MOD = 1e9 + 7;
 
 int main() {
-    ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
+    // ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
     
-    int t, n, k;
-    char c;
-    cin >> t;
-    for (int d = 0; d < t; d++) {
-        cin >> n >> k;
-        int free = 0, count = 0, block = 0;
-        for (int i = 0; i < n; i++) {
-            cin >> c;
-            if (c == '0') {
-                free++;
-            } else {
-                if (block == 0 && free > 0) {
-                    free -= k;
-                    count += ceil(free / (k + 1.0));
-                } else if (block != 0) {
-                    free -= 2 * k;
-                    if (free > 0)
-                        count += ceil(free / (k + 1.0));
-                }
+    ull q;
+    cin >> q;
+    vector<ull> divisors;
+    ull upper = sqrt(q);
+    for (int d = 2; d <= upper; d++) {
+        if (q % d == 0)
+            divisors.push_back(d);
+        if (divisors.size() == 2)
+            break;
+    }
 
-                free = 0;
-                block++;
-            }
+    // debug(_(divisors));
+    if (divisors.size() == 0) // prime or 1
+        cout << 1 << eol << 0 << eol;
+    else if (divisors.size() == 1 || divisors[0] * divisors[1] == q) {
+        double x = log(q) / log(divisors[0]);
+        if (floor(x) == x) {
+            cout << 1 << eol;
+            cout << divisors[0] * divisors[0] << eol;
+        } else {
+            cout << 2 << eol;
         }
-        if (free != 0 && block != 0) {
-            free -= k;
-            count += ceil(free / (k + 1.0));
-        }
-
-        if (block == 0)
-            count = ceil(free / (k + 1.0));
-        cout << count << eol;
+    } else  {
+        ull p = divisors[0];
+        cout << 1 << eol;
+        cout << (p * p == divisors[1] ? divisors[1] : p * divisors[1]) << eol;
     }
 }
