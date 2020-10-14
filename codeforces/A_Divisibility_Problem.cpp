@@ -16,37 +16,16 @@ template <typename T1, typename T2> string to_str(map<T1, T2> x) { string r = "{
 const ull MOD = 1e9 + 7;
 
 int main() {
-    // ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
+    ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
     
-    ull q;
-    cin >> q;
-    vector<ull> divisors;
-    ull upper = sqrt(q);
-    for (int d = 2; d <= upper; d++) {
-        if (q % d == 0)
-            divisors.push_back(d);
-        if (divisors.size() == 2)
-            break;
-    }
-
-    if (divisors.size() == 0) // prime or 1
-        cout << 1 << eol << 0 << eol;
-    else if (divisors.size() == 1 || divisors[0] * divisors[1] == q) {
-        double x = log(q) / log(divisors[0]);
-        if (floor(x) == x) {
-            ull x2 = floor(x);
-            if (x2 & 1) {
-                cout << 1 << eol;
-                cout << divisors[0] * divisors[0] << eol;
-            } else {
-                cout << 2 << eol;
-            }
-        } else {
-            cout << 2 << eol;
-        }
-    } else  {
-        ull p = divisors[0];
-        cout << 1 << eol;
-        cout << (p * p == divisors[1] ? divisors[1] : p * divisors[1]) << eol;
+    int g;
+    cin >> g;
+    for (int t = 0; t < g; t++) {
+        int a, b;
+        cin >> a >> b;
+        if (a % b == 0)
+            cout << 0 << eol;
+        else
+            cout << b - a % b << eol;            
     }
 }
