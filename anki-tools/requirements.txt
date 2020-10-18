@@ -1,4 +1,0 @@
-matplotlib
-networkx
-ankipandas
-wiktionaryparser
