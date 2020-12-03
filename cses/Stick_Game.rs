@@ -6,22 +6,42 @@ use std::io::{self, prelude::*}; use std::str;
 struct Scanner<R> { reader: R, buf_str: Vec<u8>, buf_iter: str::SplitWhitespace<'static>}
 impl<R: BufRead> Scanner<R> { fn new(reader: R) -> Self { Self { reader, buf_str: vec![], buf_iter: "".split_whitespace() } } fn token<T: str::FromStr>(&mut self) -> T { loop { if let Some(token) = self.buf_iter.next() { return token.parse().ok().expect("Failed parse"); } self.buf_str.clear(); self.reader.read_until(b'\n', &mut self.buf_str).expect("Failed read"); self.buf_iter = unsafe { let slice = str::from_utf8_unchecked(&self.buf_str); std::mem::transmute(slice.split_whitespace()) } } } }
 
-// TODO
+fn sprague_grundy(g: i32, nimbres: &mut Vec<i32>, moves: &Vec<i32>) {
+    for n in 1..g+1 {
+        let mut set: Vec<i32> = vec![];
+        for mv in moves.iter() {
+            if n - mv >= 0 {
+                set.push(nimbres[(n - mv) as usize]);
+            }
+        }
+    
+        set.sort_unstable();
+        // set.dedup();
+        let mut mex: i32 = 0;
+        for ht in set.iter() {
+            if *ht != mex {
+                break;
+            }
+            mex += 1;
+        }
+        nimbres.push(mex);
+    }
+}
+
 fn main() {
     let (stdin, stdout) = (io::stdin(), io::stdout());
     let mut sc = Scanner::new(stdin.lock()); let mut out = io::BufWriter::new(stdout.lock());
 
-    let g: u32 = sc.token::<u32>();
-    for _ in 0..g {
-        let n: u32 = sc.token::<u32>();
-        let (mut a, mut s) = (0, 0);
-        for i in 0..n {
-            let b = sc.token::<u32>();
-            if i > 0 {
-                a += b;
-                s ^= a;
-            }
-        }
-        write!(out, "{}", ternary!(s == 0, "second\n", "first\n"));
+    let (g, n) = (sc.token::<i32>(), sc.token::<u32>());
+    let (mut nimbres, mut moves) = (vec![0], vec![]);
+
+    for _ in 0..n {
+        moves.push(sc.token::<i32>());
+    }
+
+    sprague_grundy(g, &mut nimbres, &moves);
+
+    for i in 1..g+1 {
+        write!(out, "{}", ternary!(nimbres[i as usize] == 0, 'L', 'W'));
     }
 }

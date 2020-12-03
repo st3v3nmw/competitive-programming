@@ -1,0 +1,1 @@
+/home/stephen/Projects/cp/codeforces/A1_Heidi_Learns_Hashing_Easy_.cpp
